@@ -18,7 +18,6 @@ export default function Navbar({ storeId, storeName }: { storeId: string; storeN
   const [isHistoryModalOpen, setHistoryModalOpen] = useState(false);
   const router = useRouter();
 
-  // Αποφυγή hydration mismatch για το theme
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
@@ -30,53 +29,151 @@ export default function Navbar({ storeId, storeName }: { storeId: string; storeN
     router.push('/login');
   };
 
+  const isDark = theme === 'dark';
+
   return (
-    <nav className="sticky top-0 z-50 w-full bg-white dark:bg-[#121212] border-b border-gray-200 dark:border-gray-800 shadow-sm">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-16">
-          {/* Brand & Store Name */}
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-[#C5A066] flex items-center justify-center text-white font-bold text-lg">
-                V
+    <>
+      <nav
+        className="sticky top-0 z-50 w-full border-b backdrop-blur-md"
+        style={{
+          backgroundColor: 'var(--nav-bg)',
+          borderColor: 'var(--nav-border)',
+          boxShadow: 'var(--shadow-sm)',
+        }}
+      >
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+
+            {/* Brand & Store Name */}
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2.5">
+                {/* Logo */}
+                <div
+                  className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-base shadow-sm"
+                  style={{
+                    background: 'linear-gradient(135deg, var(--accent), var(--accent-hover))',
+                    boxShadow: '0 2px 8px var(--accent-muted)',
+                  }}
+                >
+                  V
+                </div>
+                <span
+                  className="font-bold text-xl tracking-widest hidden sm:block"
+                  style={{ color: 'var(--text-primary)', letterSpacing: '0.15em' }}
+                >
+                  VERTEX
+                </span>
               </div>
-              <span className="font-bold text-xl tracking-wider text-gray-900 dark:text-white hidden sm:block">
-                VERTEX
-              </span>
-            </div>
-            <div className="h-6 w-px bg-gray-300 dark:bg-gray-700 hidden sm:block"></div>
-            <div className="flex items-center gap-2 text-gray-600 dark:text-gray-300 font-medium">
-              <Store className="w-4 h-4 text-[#C5A066]" />
-              {storeName}
-            </div>
-          </div>
 
-          {/* Actions */}
-          <div className="flex items-center gap-2 sm:gap-4">
-            <button 
-              onClick={() => setHistoryModalOpen(true)}
-              className="p-2 text-gray-500 hover:text-[#C5A066] dark:text-gray-400 dark:hover:text-[#C5A066] transition-colors rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
-            >
-              <BarChart3 className="w-5 h-5" />
-            </button>
-            
-            {mounted && (
-              <button
-                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                className="p-2 text-gray-500 hover:text-[#C5A066] dark:text-gray-400 dark:hover:text-[#C5A066] transition-colors rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
+              {/* Divider */}
+              <div
+                className="h-5 w-px hidden sm:block"
+                style={{ backgroundColor: 'var(--border-default)' }}
+              />
+
+              {/* Store name */}
+              <div
+                className="flex items-center gap-1.5 text-sm font-medium hidden sm:flex"
+                style={{ color: 'var(--text-secondary)' }}
               >
-                {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-              </button>
-            )}
+                <Store className="w-3.5 h-3.5" style={{ color: 'var(--accent)' }} />
+                {storeName}
+              </div>
+            </div>
 
-            <button onClick={handleLogout} className="p-2 text-red-500 hover:text-red-600 transition-colors rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 ml-2">
-              <LogOut className="w-5 h-5" />
-            </button>
+            {/* Actions */}
+            <div className="flex items-center gap-1">
+              {/* Stats button */}
+              <button
+                onClick={() => setHistoryModalOpen(true)}
+                className="p-2 rounded-lg transition-all duration-150 group"
+                style={{ color: 'var(--text-muted)' }}
+                onMouseEnter={e => {
+                  (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'var(--accent-muted)';
+                  (e.currentTarget as HTMLButtonElement).style.color = 'var(--accent)';
+                }}
+                onMouseLeave={e => {
+                  (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'transparent';
+                  (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-muted)';
+                }}
+                title="Ιστορικό & Στατιστικά"
+              >
+                <BarChart3 className="w-5 h-5" />
+              </button>
+
+              {/* Theme toggle */}
+              {mounted && (
+                <button
+                  onClick={() => setTheme(isDark ? 'light' : 'dark')}
+                  className="p-2 rounded-lg transition-all duration-150 relative overflow-hidden"
+                  style={{ color: 'var(--text-muted)' }}
+                  onMouseEnter={e => {
+                    (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'var(--accent-muted)';
+                    (e.currentTarget as HTMLButtonElement).style.color = 'var(--accent)';
+                  }}
+                  onMouseLeave={e => {
+                    (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'transparent';
+                    (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-muted)';
+                  }}
+                  title={isDark ? 'Εναλλαγή σε Light Mode' : 'Εναλλαγή σε Dark Mode'}
+                >
+                  <div
+                    className="transition-all duration-300"
+                    style={{
+                      transform: isDark ? 'rotate(0deg) scale(1)' : 'rotate(-30deg) scale(0.9)',
+                      opacity: isDark ? 1 : 0,
+                      position: 'absolute',
+                      inset: 0,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Sun className="w-5 h-5" />
+                  </div>
+                  <div
+                    className="transition-all duration-300"
+                    style={{
+                      transform: isDark ? 'rotate(30deg) scale(0.9)' : 'rotate(0deg) scale(1)',
+                      opacity: isDark ? 0 : 1,
+                    }}
+                  >
+                    <Moon className="w-5 h-5" />
+                  </div>
+                </button>
+              )}
+
+              {/* Divider */}
+              <div
+                className="h-5 w-px mx-1"
+                style={{ backgroundColor: 'var(--border-default)' }}
+              />
+
+              {/* Logout */}
+              <button
+                onClick={handleLogout}
+                className="p-2 rounded-lg transition-all duration-150"
+                style={{ color: 'var(--danger)' }}
+                onMouseEnter={e => {
+                  (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'var(--danger-bg)';
+                }}
+                onMouseLeave={e => {
+                  (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'transparent';
+                }}
+                title="Αποσύνδεση"
+              >
+                <LogOut className="w-5 h-5" />
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      </nav>
 
-      <HistoryStatsModal isOpen={isHistoryModalOpen} onClose={() => setHistoryModalOpen(false)} storeId={storeId} />
-    </nav>
+      <HistoryStatsModal
+        isOpen={isHistoryModalOpen}
+        onClose={() => setHistoryModalOpen(false)}
+        storeId={storeId}
+      />
+    </>
   );
 }

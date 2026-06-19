@@ -72,7 +72,7 @@ export function useActiveOrders(storeId: string) {
             try {
               const audio = new Audio('/notification.mp3');
               audio.play().catch((e) => console.log('Σφάλμα αναπαραγωγής ήχου:', e));
-            } catch (_err) {}
+            } catch {}
           }
           fetchOrders();
         }
