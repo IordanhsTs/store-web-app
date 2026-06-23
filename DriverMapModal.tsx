@@ -19,14 +19,19 @@ export default function DriverMapModal({ isOpen, onClose, driverName, lat, lng }
     id: 'script-loader',
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY as string,
     libraries,
+    language: 'el',
+    region: 'GR',
   });
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="bg-white dark:bg-[#1A1A1A] w-full max-w-2xl rounded-2xl shadow-xl overflow-hidden flex flex-col">
-        <div className="flex justify-between items-center p-4 border-b border-gray-100 dark:border-gray-800">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-md p-4 animate-fade-in">
+      <div 
+        className="w-full max-w-2xl rounded-2xl shadow-xl overflow-hidden flex flex-col animate-scale-in backdrop-blur-xl backdrop-saturate-150"
+        style={{ backgroundColor: 'var(--nav-bg)', border: '1px solid var(--nav-border)' }}
+      >
+        <div className="flex justify-between items-center p-4 border-b" style={{ borderColor: 'var(--border-default)' }}>
           <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
             <Navigation className="w-5 h-5 text-blue-500" />
             Τοποθεσία: {driverName}

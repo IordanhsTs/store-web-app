@@ -98,7 +98,7 @@ export default function ActiveOrdersList({ storeId }: { storeId: string }) {
   if (orders.length === 0) {
     return (
       <div
-        className="flex flex-col items-center justify-center py-20 rounded-2xl text-center"
+        className="flex flex-col items-center justify-center py-20 rounded-2xl text-center transition-all duration-300 hover:-translate-y-1 hover:shadow-xl cursor-default"
         style={{
           backgroundColor: 'var(--bg-card)',
           border: '1px dashed var(--border-default)',
@@ -136,25 +136,17 @@ export default function ActiveOrdersList({ storeId }: { storeId: string }) {
           return (
             <div
               key={order.id}
-              className="animate-fade-in-up relative overflow-hidden transition-all duration-200"
+              className="animate-fade-in-up relative overflow-hidden transition-all duration-300 hover:-translate-y-1.5 hover:shadow-lg group"
               style={{
                 backgroundColor: 'var(--bg-card)',
-                border: '1px solid var(--border-default)',
-                borderRadius: 'var(--radius-xl)',
-                boxShadow: 'var(--shadow-sm)',
-              }}
-              onMouseEnter={e => {
-                (e.currentTarget as HTMLDivElement).style.boxShadow = 'var(--shadow-md)';
-                (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-1px)';
-              }}
-              onMouseLeave={e => {
-                (e.currentTarget as HTMLDivElement).style.boxShadow = 'var(--shadow-sm)';
-                (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)';
+                borderRadius: '20px',
+                border: '1px solid var(--border-subtle)',
+                boxShadow: 'var(--shadow-md)',
               }}
             >
               {/* Left status stripe */}
               <div
-                className="absolute left-0 top-0 bottom-0 w-1"
+                className="absolute left-0 top-0 bottom-0 w-1.5 opacity-90 transition-opacity group-hover:opacity-100"
                 style={{
                   background: isLate
                     ? 'var(--danger)'
@@ -165,7 +157,7 @@ export default function ActiveOrdersList({ storeId }: { storeId: string }) {
                 }}
               />
 
-              <div className="pl-5 pr-5 pt-4 pb-4">
+              <div className="p-6 pl-7">
                 {/* Top row: address + time badge */}
                 <div className="flex justify-between items-start gap-3 mb-2">
                   <div className="flex-1 min-w-0">

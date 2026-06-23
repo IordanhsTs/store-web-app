@@ -24,12 +24,15 @@ const DATE_FILTERS = [
   { label: 'Σήμερα', val: 0 },
   { label: '3 Ημέρες', val: 3 },
   { label: '7 Ημέρες', val: 7 },
+  { label: 'Επιλογή', val: -1 },
 ];
 
 export default function HistoryStatsModal({ isOpen, onClose, storeId }: HistoryStatsModalProps) {
   const [orders, setOrders] = useState<CompletedOrder[]>([]);
   const [loading, setLoading] = useState(false);
   const [dateRange, setDateRange] = useState(0);
+  const [customStart, setCustomStart] = useState('');
+  const [customEnd, setCustomEnd] = useState('');
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -42,8 +45,19 @@ export default function HistoryStatsModal({ isOpen, onClose, storeId }: HistoryS
     const fetchHistory = async () => {
       setLoading(true);
 
-      const startDate = startOfDay(subDays(new Date(), dateRange)).toISOString();
-      const endDate = endOfDay(new Date()).toISOString();
+      let startDate, endDate;
+      if (dateRange === -1) {
+        if (!customStart || !customEnd) {
+          setOrders([]);
+          setLoading(false);
+          return;
+        }
+        startDate = new Date(customStart).toISOString();
+        endDate = new Date(customEnd).toISOString();
+      } else {
+        startDate = startOfDay(subDays(new Date(), dateRange)).toISOString();
+        endDate = endOfDay(new Date()).toISOString();
+      }
 
       const { data, error } = await supabase
         .from('orders')
@@ -60,7 +74,7 @@ export default function HistoryStatsModal({ isOpen, onClose, storeId }: HistoryS
     };
 
     fetchHistory();
-  }, [isOpen, dateRange, storeId, supabase]);
+  }, [isOpen, dateRange, customStart, customEnd, storeId, supabase]);
 
   if (!isOpen) return null;
 
@@ -87,14 +101,14 @@ export default function HistoryStatsModal({ isOpen, onClose, storeId }: HistoryS
   return (
     <div
       className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-fade-in"
-      style={{ backgroundColor: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)' }}
+      style={{ backgroundColor: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(8px)' }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
-        className="w-full max-w-3xl flex flex-col animate-scale-in"
+        className="w-full max-w-3xl flex flex-col animate-scale-in backdrop-blur-xl backdrop-saturate-150"
         style={{
-          backgroundColor: 'var(--bg-modal)',
-          border: '1px solid var(--border-default)',
+          backgroundColor: 'var(--nav-bg)',
+          border: '1px solid var(--nav-border)',
           borderRadius: 'var(--radius-2xl)',
           boxShadow: 'var(--shadow-xl)',
           maxHeight: '90vh',
@@ -136,29 +150,73 @@ export default function HistoryStatsModal({ isOpen, onClose, storeId }: HistoryS
         <div className="flex-1 overflow-y-auto p-6">
 
           {/* Date filter pills */}
-          <div className="flex gap-2 mb-6">
-            {DATE_FILTERS.map(filter => (
-              <button
-                key={filter.val}
-                onClick={() => setDateRange(filter.val)}
-                className="px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-150"
-                style={
-                  dateRange === filter.val
-                    ? {
-                        background: 'linear-gradient(135deg, var(--accent), var(--accent-hover))',
-                        color: '#fff',
-                        boxShadow: '0 2px 8px var(--accent-muted)',
-                      }
-                    : {
-                        backgroundColor: 'var(--bg-tertiary)',
-                        color: 'var(--text-secondary)',
-                        border: '1px solid var(--border-default)',
-                      }
-                }
-              >
-                {filter.label}
-              </button>
-            ))}
+          <div className="flex flex-col gap-4 mb-6">
+            <div className="flex flex-wrap gap-2">
+              {DATE_FILTERS.map(filter => (
+                <button
+                  key={filter.val}
+                  onClick={() => setDateRange(filter.val)}
+                  className="px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-150"
+                  style={
+                    dateRange === filter.val
+                      ? {
+                          background: 'linear-gradient(135deg, var(--accent), var(--accent-hover))',
+                          color: '#fff',
+                          boxShadow: '0 2px 8px var(--accent-muted)',
+                        }
+                      : {
+                          backgroundColor: 'var(--bg-tertiary)',
+                          color: 'var(--text-secondary)',
+                          border: '1px solid var(--border-default)',
+                        }
+                  }
+                >
+                  {filter.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Custom Date Time Inputs */}
+            {dateRange === -1 && (
+              <div className="flex flex-wrap items-center gap-3 animate-fade-in p-4 rounded-xl" style={{ backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border-default)' }}>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Από (Ημερομηνία & Ώρα)</label>
+                  <input
+                    type="datetime-local"
+                    value={customStart}
+                    onChange={(e) => setCustomStart(e.target.value)}
+                    className="px-3 py-2 rounded-lg text-sm outline-none transition-all duration-200"
+                    style={{ backgroundColor: 'var(--bg-input)', color: 'var(--text-primary)', border: '1.5px solid var(--text-primary)' }}
+                    onFocus={e => {
+                      e.target.style.borderColor = 'var(--accent)';
+                      e.target.style.boxShadow = '0 0 0 3px var(--accent-muted)';
+                    }}
+                    onBlur={e => {
+                      e.target.style.borderColor = 'var(--text-primary)';
+                      e.target.style.boxShadow = 'none';
+                    }}
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Έως (Ημερομηνία & Ώρα)</label>
+                  <input
+                    type="datetime-local"
+                    value={customEnd}
+                    onChange={(e) => setCustomEnd(e.target.value)}
+                    className="px-3 py-2 rounded-lg text-sm outline-none transition-all duration-200"
+                    style={{ backgroundColor: 'var(--bg-input)', color: 'var(--text-primary)', border: '1.5px solid var(--text-primary)' }}
+                    onFocus={e => {
+                      e.target.style.borderColor = 'var(--accent)';
+                      e.target.style.boxShadow = '0 0 0 3px var(--accent-muted)';
+                    }}
+                    onBlur={e => {
+                      e.target.style.borderColor = 'var(--text-primary)';
+                      e.target.style.boxShadow = 'none';
+                    }}
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           {loading ? (

@@ -34,7 +34,7 @@ export default function Navbar({ storeId, storeName }: { storeId: string; storeN
   return (
     <>
       <nav
-        className="sticky top-0 z-50 w-full border-b backdrop-blur-md"
+        className="sticky top-0 z-50 w-full border-b backdrop-blur-xl backdrop-saturate-150"
         style={{
           backgroundColor: 'var(--nav-bg)',
           borderColor: 'var(--nav-border)',

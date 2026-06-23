@@ -24,7 +24,8 @@ export default function SystemAlertListener({ storeId }: { storeId: string }) {
 
         // Check if the message is for this store
         if (data.target_type === 'store') {
-          if (data.target_id === 'all' || data.target_id === storeId) {
+          const targets = Array.isArray(data.target_ids) ? data.target_ids : [data.target_id];
+          if (targets.includes('all') || targets.includes(storeId)) {
             setAlertMessage(data.message);
             // Play sound
             alertSound.currentTime = 0;

@@ -43,6 +43,8 @@ export default function OrderCreationForm({ storeId }: { storeId: string }) {
     id: 'script-loader',
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY as string,
     libraries,
+    language: 'el',
+    region: 'GR',
   });
 
   const showToast = (message: string, type: 'success' | 'error') => {
@@ -138,57 +140,52 @@ export default function OrderCreationForm({ storeId }: { storeId: string }) {
           boxShadow: 'var(--shadow-sm)',
         }}
       >
-        {/* Header */}
-        <div className="flex items-center gap-2.5 mb-6">
-          <div
-            className="w-8 h-8 rounded-lg flex items-center justify-center"
-            style={{ backgroundColor: 'var(--accent-muted)' }}
-          >
-            <Navigation className="w-4 h-4" style={{ color: 'var(--accent)' }} />
-          </div>
-          <h2 className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>
-            Νέα Παραγγελία
-          </h2>
-        </div>
-
         {/* Address + Number */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
           <div className="md:col-span-2 space-y-1.5">
             <label className="block text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
               Οδός
             </label>
-            <Autocomplete
-              onLoad={(autocomplete) => (autocompleteRef.current = autocomplete)}
-              onPlaceChanged={handlePlaceChanged}
-            >
-              <input
-                type="text"
-                placeholder="Αρχίστε να πληκτρολογείτε..."
-                value={street}
-                onChange={(e) => setStreet(e.target.value)}
-                style={{ ...inputStyle, paddingLeft: '40px' }}
-                className="relative"
-                onFocus={e => {
-                  e.target.style.borderColor = 'var(--accent)';
-                  e.target.style.boxShadow = '0 0 0 3px var(--accent-muted)';
+            <div className="relative">
+              <Autocomplete
+                onLoad={(autocomplete) => (autocompleteRef.current = autocomplete)}
+                onPlaceChanged={handlePlaceChanged}
+                options={{
+                  bounds: {
+                    south: 40.70,
+                    west: 21.30,
+                    north: 40.85,
+                    east: 21.50,
+                  },
                 }}
-                onBlur={e => {
-                  e.target.style.borderColor = 'var(--border-default)';
-                  e.target.style.boxShadow = 'none';
+              >
+                <input
+                  type="text"
+                  placeholder="Αρχίστε να πληκτρολογείτε..."
+                  value={street}
+                  onChange={(e) => setStreet(e.target.value)}
+                  style={{ ...inputStyle, paddingLeft: '40px' }}
+                  onFocus={e => {
+                    e.target.style.borderColor = 'var(--accent)';
+                    e.target.style.boxShadow = '0 0 0 3px var(--accent-muted)';
+                  }}
+                  onBlur={e => {
+                    e.target.style.borderColor = 'var(--border-default)';
+                    e.target.style.boxShadow = 'none';
+                  }}
+                />
+              </Autocomplete>
+              <MapPin
+                className="w-4 h-4 absolute"
+                style={{
+                  color: 'var(--text-muted)',
+                  left: '12px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  pointerEvents: 'none',
                 }}
               />
-            </Autocomplete>
-            <MapPin
-              className="w-4 h-4 absolute"
-              style={{
-                color: 'var(--text-muted)',
-                position: 'absolute',
-                left: '12px',
-                top: '50%',
-                transform: 'translateY(-50%)',
-                pointerEvents: 'none',
-              }}
-            />
+            </div>
           </div>
           <div className="space-y-1.5">
             <label className="block text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
