@@ -274,7 +274,12 @@ export default function ActiveOrdersList({ storeId }: { storeId: string }) {
 
                 {expandedOrderId === order.id && order.drivers?.latitude && order.drivers?.longitude && (
                   <div className="mt-4 animate-fade-in">
-                    <DriverMapInline lat={order.drivers.latitude} lng={order.drivers.longitude} />
+                    <DriverMapInline 
+                      lat={order.drivers.latitude} 
+                      lng={order.drivers.longitude} 
+                      driverName={order.drivers.full_name}
+                      isBusy={true}
+                    />
                   </div>
                 )}
               </div>
