@@ -33,10 +33,6 @@ export default async function DashboardPage() {
   // Έλεγχος Authentication
   const { data: { user }, error: authError } = await supabase.auth.getUser();
 
-  if (authError) {
-    console.error("Auth Error:", authError.message);
-  }
-
   if (authError || !user) {
     redirect('/login');
   }
@@ -63,6 +59,32 @@ export default async function DashboardPage() {
           }}
         >
           <p className="text-lg font-medium">Δεν βρέθηκε κατάστημα για αυτόν τον χρήστη.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (store.is_blocked) {
+    return (
+      <div
+        className="min-h-screen flex items-center justify-center"
+        style={{ backgroundColor: 'var(--bg-primary)' }}
+      >
+        <div
+          className="p-8 rounded-2xl text-center max-w-md space-y-4"
+          style={{
+            backgroundColor: 'var(--bg-card)',
+            border: '1px solid var(--danger-border)',
+            color: 'var(--danger)',
+          }}
+        >
+          <h2 className="text-2xl font-bold">Λογαριασμός Μπλοκαρισμένος</h2>
+          <p className="text-sm">Η πρόσβαση στο σύστημα έχει διακοπεί από το διαχειριστή.</p>
+          <form action="/login">
+            <button type="submit" className="px-4 py-2 bg-red-500 text-white rounded-lg mt-4 font-semibold">
+              Επιστροφή στην Είσοδο
+            </button>
+          </form>
         </div>
       </div>
     );

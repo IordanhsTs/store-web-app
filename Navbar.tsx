@@ -1,7 +1,7 @@
 'use client';
 
 import { useTheme } from 'next-themes';
-import { Moon, Sun, LogOut, BarChart3, Store } from 'lucide-react';
+import { Moon, Sun, LogOut, BarChart3, Store, Volume2, VolumeX } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
 import HistoryStatsModal from './HistoryStatsModal';
@@ -18,10 +18,31 @@ export default function Navbar({ storeId, storeName }: { storeId: string; storeN
   const [isHistoryModalOpen, setHistoryModalOpen] = useState(false);
   const router = useRouter();
 
+  const [isSoundEnabled, setIsSoundEnabled] = useState(true);
+
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
+    const savedSound = localStorage.getItem('soundEnabled');
+    if (savedSound !== null) {
+      setIsSoundEnabled(savedSound === 'true');
+    }
   }, []);
+
+  const toggleSound = () => {
+    const newState = !isSoundEnabled;
+    setIsSoundEnabled(newState);
+    localStorage.setItem('soundEnabled', newState.toString());
+    
+    if (newState) {
+      // Play a tiny beep to unlock the browser's audio engine
+      try {
+        const audio = new Audio('/notification.mp3');
+        audio.volume = 0.1;
+        audio.play().catch(() => {});
+      } catch (e) {}
+    }
+  };
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -140,6 +161,24 @@ export default function Navbar({ storeId, storeName }: { storeId: string; storeN
                   >
                     <Moon className="w-5 h-5" />
                   </div>
+                </button>
+              )}
+
+              {/* Sound toggle */}
+              {mounted && (
+                <button
+                  onClick={toggleSound}
+                  className="p-2 rounded-lg transition-all duration-150"
+                  style={{ color: isSoundEnabled ? 'var(--accent)' : 'var(--text-muted)' }}
+                  onMouseEnter={e => {
+                    (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'var(--accent-muted)';
+                  }}
+                  onMouseLeave={e => {
+                    (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'transparent';
+                  }}
+                  title={isSoundEnabled ? 'Σίγαση ειδοποιήσεων' : 'Ενεργοποίηση ήχων'}
+                >
+                  {isSoundEnabled ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
                 </button>
               )}
 

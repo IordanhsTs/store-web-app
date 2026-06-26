@@ -5,7 +5,7 @@ import { useActiveOrders } from './useActiveOrders';
 import { Clock, Map, XCircle, User, MessageSquare, Package, CheckCircle2 } from 'lucide-react';
 import { differenceInMinutes } from 'date-fns';
 import { createBrowserClient } from '@supabase/ssr';
-import DriverMapModal from './DriverMapModal';
+import DriverMapInline from './DriverMapInline';
 
 const supabase = createBrowserClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -34,12 +34,7 @@ export default function ActiveOrdersList({ storeId }: { storeId: string }) {
   const { orders, loading } = useActiveOrders(storeId);
   const [now, setNow] = useState(new Date());
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
-  const [mapModal, setMapModal] = useState({
-    isOpen: false,
-    driverName: '',
-    lat: 0,
-    lng: 0
-  });
+  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
 
   // Ανανέωση του ρολογιού κάθε 60 δευτερόλεπτα
   useEffect(() => {
@@ -256,12 +251,7 @@ export default function ActiveOrdersList({ storeId }: { storeId: string }) {
                       <button
                         onClick={() => {
                           if (order.drivers?.latitude && order.drivers?.longitude) {
-                            setMapModal({
-                              isOpen: true,
-                              driverName: order.drivers.full_name,
-                              lat: order.drivers.latitude,
-                              lng: order.drivers.longitude
-                            });
+                            setExpandedOrderId(prev => prev === order.id ? null : order.id);
                           } else {
                             showToast('Δεν υπάρχει διαθέσιμη τοποθεσία για αυτόν τον οδηγό.', 'error');
                           }
@@ -276,24 +266,22 @@ export default function ActiveOrdersList({ storeId }: { storeId: string }) {
                         }}
                       >
                         <Map className="w-4 h-4" />
-                        Χάρτης
+                        {expandedOrderId === order.id ? 'Κλείσιμο Χάρτη' : 'Χάρτης'}
                       </button>
                     </>
                   )}
                 </div>
+
+                {expandedOrderId === order.id && order.drivers?.latitude && order.drivers?.longitude && (
+                  <div className="mt-4 animate-fade-in">
+                    <DriverMapInline lat={order.drivers.latitude} lng={order.drivers.longitude} />
+                  </div>
+                )}
               </div>
             </div>
           );
         })}
       </div>
-
-      <DriverMapModal
-        isOpen={mapModal.isOpen}
-        onClose={() => setMapModal({ ...mapModal, isOpen: false })}
-        driverName={mapModal.driverName}
-        lat={mapModal.lat}
-        lng={mapModal.lng}
-      />
     </>
   );
 }

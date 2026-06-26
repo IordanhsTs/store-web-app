@@ -35,8 +35,20 @@ export default function SystemAlertListener({ storeId }: { storeId: string }) {
       })
       .subscribe();
 
+    const statusChannel = supabase
+      .channel(`store_status_${storeId}`)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'stores', filter: `id=eq.${storeId}` }, async (payload) => {
+        if (payload.new && payload.new.is_blocked === true) {
+          alert('Η πρόσβαση στο λογαριασμό σας έχει διακοπεί από το διαχειριστή.');
+          await supabase.auth.signOut();
+          window.location.replace('/login');
+        }
+      })
+      .subscribe();
+
     return () => {
       supabase.removeChannel(channel);
+      supabase.removeChannel(statusChannel);
     };
   }, [storeId]);
 

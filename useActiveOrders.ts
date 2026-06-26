@@ -22,15 +22,15 @@ export type Order = {
   } | null;
 };
 
+// Initialize Supabase client globally so it's not recreated on every render
+const supabase = createBrowserClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
+
 export function useActiveOrders(storeId: string) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
-
-  // Initialize Supabase client
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
 
   useEffect(() => {
     if (!storeId) return;
@@ -56,8 +56,9 @@ export function useActiveOrders(storeId: string) {
     fetchOrders();
 
     // 2. Subscribe to real-time changes
+    const channelId = `active_orders_updates_${storeId}_${Math.random().toString(36).substring(7)}`;
     const channel = supabase
-      .channel('active_orders_updates')
+      .channel(channelId)
       .on(
         'postgres_changes',
         {
@@ -70,19 +71,66 @@ export function useActiveOrders(storeId: string) {
           // Αναπαραγωγή ήχου αν προστεθεί νέα παραγγελία
           if (payload.eventType === 'INSERT') {
             try {
-              const audio = new Audio('/notification.mp3');
-              audio.play().catch((e) => console.log('Σφάλμα αναπαραγωγής ήχου:', e));
+              const soundEnabled = localStorage.getItem('soundEnabled') !== 'false';
+              if (soundEnabled) {
+                const audio = new Audio('/notification.mp3');
+                audio.play().catch((e) => console.log('Σφάλμα αναπαραγωγής ήχου:', e));
+              }
             } catch {}
+            fetchOrders();
+          } else if (payload.eventType === 'UPDATE') {
+            const updatedOrder = payload.new as Partial<Order>;
+            if (updatedOrder.status === 'completed' || updatedOrder.status === 'cancelled') {
+              setOrders((prev) => prev.filter((o) => o.id !== updatedOrder.id));
+            } else {
+              fetchOrders();
+            }
+          } else if (payload.eventType === 'DELETE') {
+            setOrders((prev) => prev.filter((o) => o.id !== payload.old?.id));
+          } else {
+            fetchOrders();
           }
-          fetchOrders();
+        }
+      )
+      .subscribe();
+
+    // 3. Subscribe to driver location updates
+    const driverChannelId = `active_drivers_updates_${storeId}_${Math.random().toString(36).substring(7)}`;
+    const driverChannel = supabase
+      .channel(driverChannelId)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'drivers',
+        },
+        (payload) => {
+          const updatedDriver = payload.new;
+          setOrders((prev) =>
+            prev.map((order) => {
+              if (order.driver_id === updatedDriver.id && order.drivers) {
+                return {
+                  ...order,
+                  drivers: {
+                    ...order.drivers,
+                    latitude: updatedDriver.latitude,
+                    longitude: updatedDriver.longitude,
+                  },
+                };
+              }
+              return order;
+            })
+          );
         }
       )
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
+      supabase.removeChannel(driverChannel);
     };
-  }, [storeId, supabase]);
+  }, [storeId]);
 
   return { orders, loading };
 }

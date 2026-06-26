@@ -21,7 +21,7 @@ export default function LoginForm() {
     setLoading(true);
     setError('');
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data: authData, error } = await supabase.auth.signInWithPassword({ email, password });
 
     if (error) {
       setError(
@@ -31,6 +31,13 @@ export default function LoginForm() {
       );
       setLoading(false);
     } else {
+      const { data: storeProfile } = await supabase.from('stores').select('is_blocked').eq('id', authData.user.id).single();
+      if (storeProfile && storeProfile.is_blocked) {
+        await supabase.auth.signOut();
+        setError('Η πρόσβαση στο λογαριασμό σας έχει διακοπεί από το διαχειριστή.');
+        setLoading(false);
+        return;
+      }
       window.location.replace('/');
     }
   };
