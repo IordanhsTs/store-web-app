@@ -20,7 +20,7 @@ function SystemLoadBadge() {
   const config = {
     quiet: {
       Icon: Snowflake,
-      label: 'Ήσυχα',
+      label: 'Χαμηλός Φόρτος',
       color: '#60A5FA',
       bg: 'rgba(96,165,250,0.12)',
       border: 'rgba(96,165,250,0.35)',
@@ -28,7 +28,7 @@ function SystemLoadBadge() {
     },
     moderate: {
       Icon: Zap,
-      label: 'Μέτρια',
+      label: 'Μέτριος Φόρτος',
       color: '#FBBF24',
       bg: 'rgba(251,191,36,0.12)',
       border: 'rgba(251,191,36,0.35)',
@@ -36,7 +36,7 @@ function SystemLoadBadge() {
     },
     busy: {
       Icon: Flame,
-      label: 'Πολυάσχολα',
+      label: 'Υψυλός Φόρτος',
       color: '#F87171',
       bg: 'rgba(248,113,113,0.12)',
       border: 'rgba(248,113,113,0.35)',
