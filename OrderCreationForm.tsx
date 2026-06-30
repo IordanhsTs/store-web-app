@@ -12,23 +12,6 @@ const supabase = createBrowserClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-function Toast({ message, type, onClose }: { message: string; type: 'success' | 'error'; onClose: () => void }) {
-  return (
-    <div
-      className="fixed bottom-6 right-6 z-[200] flex items-center gap-3 px-5 py-4 rounded-xl shadow-xl animate-fade-in-up text-sm font-medium"
-      style={{
-        backgroundColor: type === 'success' ? 'var(--success-bg)' : 'var(--danger-bg)',
-        border: `1px solid ${type === 'success' ? 'var(--success-border)' : 'var(--danger-border)'}`,
-        color: type === 'success' ? 'var(--success)' : 'var(--danger)',
-        backdropFilter: 'blur(8px)',
-      }}
-    >
-      <span>{message}</span>
-      <button onClick={onClose} className="ml-2 opacity-60 hover:opacity-100 transition-opacity text-xs">✕</button>
-    </div>
-  );
-}
-
 export default function OrderCreationForm({ storeId }: { storeId: string }) {
   const [street, setStreet] = useState('');
   const [streetNumber, setStreetNumber] = useState('');
@@ -127,9 +110,30 @@ export default function OrderCreationForm({ storeId }: { storeId: string }) {
 
   return (
     <>
-      {toast && (
-        <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />
-      )}
+      {/* Τίτλος + inline μήνυμα (στην ίδια γραμμή, χωρίς αναδίπλωση) */}
+      <div className="mb-6 flex items-center gap-3 min-w-0">
+        <h1 className="text-2xl font-bold tracking-tight shrink-0" style={{ color: 'var(--text-primary)' }}>
+          Νέα Παραγγελία
+        </h1>
+        {toast && (
+          <div
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap animate-fade-in min-w-0"
+            style={{
+              backgroundColor: toast.type === 'success' ? 'var(--success-bg)' : 'var(--danger-bg)',
+              border: `1px solid ${toast.type === 'success' ? 'var(--success-border)' : 'var(--danger-border)'}`,
+              color: toast.type === 'success' ? 'var(--success)' : 'var(--danger)',
+            }}
+          >
+            <span className="truncate">{toast.message}</span>
+            <button
+              onClick={() => setToast(null)}
+              className="opacity-60 hover:opacity-100 transition-opacity shrink-0"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+      </div>
 
       <form
         onSubmit={handleSubmit}

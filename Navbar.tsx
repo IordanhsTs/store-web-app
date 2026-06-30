@@ -122,7 +122,12 @@ export default function Navbar({ storeId, storeName }: { storeId: string; storeN
 
             {/* Brand & Store Name */}
             <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2.5">
+              <button
+                type="button"
+                onClick={() => window.location.reload()}
+                className="flex items-center gap-2.5 cursor-pointer transition-opacity hover:opacity-80 active:opacity-60"
+                title="Ανανέωση σελίδας"
+              >
                 {/* Logo */}
                 <div
                   className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-base shadow-sm"
@@ -139,7 +144,7 @@ export default function Navbar({ storeId, storeName }: { storeId: string; storeN
                 >
                   VERTEX
                 </span>
-              </div>
+              </button>
 
               {/* Divider */}
               <div

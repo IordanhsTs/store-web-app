@@ -12,24 +12,6 @@ const supabase = createBrowserClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-function Toast({ message, type, onClose }: { message: string; type: 'success' | 'error'; onClose: () => void }) {
-  return (
-    <div
-      className="fixed bottom-6 right-6 z-[200] flex items-center gap-3 px-5 py-4 rounded-xl shadow-xl animate-fade-in-up text-sm font-medium"
-      style={{
-        backgroundColor: type === 'success' ? 'var(--success-bg)' : 'var(--danger-bg)',
-        border: `1px solid ${type === 'success' ? 'var(--success-border)' : 'var(--danger-border)'}`,
-        color: type === 'success' ? 'var(--success)' : 'var(--danger)',
-        backdropFilter: 'blur(8px)',
-      }}
-    >
-      <CheckCircle2 className="w-4 h-4 shrink-0" />
-      <span>{message}</span>
-      <button onClick={onClose} className="ml-2 opacity-60 hover:opacity-100 transition-opacity text-xs">✕</button>
-    </div>
-  );
-}
-
 export default function ActiveOrdersList({ storeId }: { storeId: string }) {
   const { orders, loading } = useActiveOrders(storeId);
   const [now, setNow] = useState(new Date());
@@ -57,10 +39,40 @@ export default function ActiveOrdersList({ storeId }: { storeId: string }) {
     }
   };
 
+  /* ── Τίτλος + inline μήνυμα (στην ίδια γραμμή, χωρίς αναδίπλωση) ── */
+  const header = (
+    <div className="mb-6 flex items-center gap-3 min-w-0">
+      <h1 className="text-2xl font-bold tracking-tight shrink-0" style={{ color: 'var(--text-primary)' }}>
+        Ενεργές Παραγγελίες
+      </h1>
+      {toast && (
+        <div
+          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap animate-fade-in min-w-0"
+          style={{
+            backgroundColor: toast.type === 'success' ? 'var(--success-bg)' : 'var(--danger-bg)',
+            border: `1px solid ${toast.type === 'success' ? 'var(--success-border)' : 'var(--danger-border)'}`,
+            color: toast.type === 'success' ? 'var(--success)' : 'var(--danger)',
+          }}
+        >
+          {toast.type === 'success' && <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />}
+          <span className="truncate">{toast.message}</span>
+          <button
+            onClick={() => setToast(null)}
+            className="opacity-60 hover:opacity-100 transition-opacity shrink-0"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+    </div>
+  );
+
   /* ── Loading skeleton ── */
   if (loading) {
     return (
-      <div className="space-y-4">
+      <>
+        {header}
+        <div className="space-y-4">
         {[1, 2, 3].map(i => (
           <div
             key={i}
@@ -85,15 +97,18 @@ export default function ActiveOrdersList({ storeId }: { storeId: string }) {
             </div>
           </div>
         ))}
-      </div>
+        </div>
+      </>
     );
   }
 
   /* ── Empty state ── */
   if (orders.length === 0) {
     return (
-      <div
-        className="flex flex-col items-center justify-center py-20 rounded-2xl text-center transition-all duration-300 hover:-translate-y-1 hover:shadow-xl cursor-default"
+      <>
+        {header}
+        <div
+          className="flex flex-col items-center justify-center py-20 rounded-2xl text-center transition-all duration-300 hover:-translate-y-1 hover:shadow-xl cursor-default"
         style={{
           backgroundColor: 'var(--bg-card)',
           border: '1px dashed var(--border-default)',
@@ -111,16 +126,15 @@ export default function ActiveOrdersList({ storeId }: { storeId: string }) {
         <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
           Δημιουργήστε μια νέα παραγγελία από την αριστερή στήλη
         </p>
-      </div>
+        </div>
+      </>
     );
   }
 
   /* ── Order cards ── */
   return (
     <>
-      {toast && (
-        <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />
-      )}
+      {header}
 
       <div className="space-y-4 stagger">
         {orders.map((order) => {
