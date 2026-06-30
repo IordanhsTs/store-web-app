@@ -162,8 +162,8 @@ export default function Navbar({ storeId, storeName }: { storeId: string; storeN
               </div>
             </div>
 
-            {/* Center: System Load Badge */}
-            <div className="absolute left-1/2 -translate-x-1/2">
+            {/* Center: System Load Badge — in-flow στο κινητό, centered σε sm+ */}
+            <div className="static sm:absolute sm:left-1/2 sm:-translate-x-1/2 mx-2 sm:mx-0">
               <SystemLoadBadge />
             </div>
 

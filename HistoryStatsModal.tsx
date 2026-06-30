@@ -356,16 +356,16 @@ export default function HistoryStatsModal({ isOpen, onClose, storeId }: HistoryS
                       className="rounded-2xl overflow-hidden"
                       style={{ border: '1px solid var(--border-default)' }}
                     >
-                      <table className="w-full text-left">
+                      <table className="w-full text-left table-fixed">
                         <thead>
                           <tr style={{ backgroundColor: 'var(--bg-tertiary)', borderBottom: '1px solid var(--border-default)' }}>
-                            <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                            <th className="w-[42%] px-3 sm:px-5 py-3 text-[11px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
                               Οδηγός
                             </th>
-                            <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
-                              Παραγγελίες
+                            <th className="w-[26%] px-3 sm:px-5 py-3 text-[11px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                              Παραγγ.
                             </th>
-                            <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                            <th className="w-[32%] px-3 sm:px-5 py-3 text-[11px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
                               Ποσοστό
                             </th>
                           </tr>
@@ -383,19 +383,19 @@ export default function HistoryStatsModal({ isOpen, onClose, storeId }: HistoryS
                                     backgroundColor: 'var(--bg-card)',
                                   }}
                                 >
-                                  <td className="px-5 py-3.5 text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+                                  <td className="px-3 sm:px-5 py-3.5 text-sm font-medium break-words align-top" style={{ color: 'var(--text-primary)' }}>
                                     {idx === 0 && <span className="mr-1.5">🥇</span>}
                                     {idx === 1 && <span className="mr-1.5">🥈</span>}
                                     {idx === 2 && <span className="mr-1.5">🥉</span>}
                                     {driver}
                                   </td>
-                                  <td className="px-5 py-3.5 text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
+                                  <td className="px-3 sm:px-5 py-3.5 text-sm font-bold align-top" style={{ color: 'var(--text-primary)' }}>
                                     {count}
                                   </td>
-                                  <td className="px-5 py-3.5">
-                                    <div className="flex items-center gap-2">
+                                  <td className="px-3 sm:px-5 py-3.5 align-top">
+                                    <div className="flex items-center gap-1.5">
                                       <div
-                                        className="flex-1 h-1.5 rounded-full overflow-hidden"
+                                        className="flex-1 min-w-0 h-1.5 rounded-full overflow-hidden"
                                         style={{ backgroundColor: 'var(--border-default)' }}
                                       >
                                         <div
@@ -406,7 +406,7 @@ export default function HistoryStatsModal({ isOpen, onClose, storeId }: HistoryS
                                           }}
                                         />
                                       </div>
-                                      <span className="text-xs font-semibold w-8 text-right" style={{ color: 'var(--text-muted)' }}>
+                                      <span className="text-xs font-semibold shrink-0 text-right" style={{ color: 'var(--text-muted)' }}>
                                         {pct}%
                                       </span>
                                     </div>
