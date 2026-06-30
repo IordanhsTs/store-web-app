@@ -80,8 +80,8 @@ export default function OrderCreationForm({ storeId }: { storeId: string }) {
         className="p-6 rounded-2xl"
         style={{
           backgroundColor: 'var(--bg-card)',
-          border: '1px solid var(--border-default)',
-          boxShadow: 'var(--shadow-sm)',
+          border: '2px solid var(--accent)',
+          boxShadow: '0 0 0 1px var(--accent-muted), var(--shadow-sm)',
         }}
       >
         <div className="space-y-4">
@@ -140,8 +140,8 @@ export default function OrderCreationForm({ storeId }: { storeId: string }) {
         className="p-6 rounded-2xl"
         style={{
           backgroundColor: 'var(--bg-card)',
-          border: '1px solid var(--border-default)',
-          boxShadow: 'var(--shadow-sm)',
+          border: '2px solid var(--accent)',
+          boxShadow: '0 0 0 1px var(--accent-muted), var(--shadow-sm)',
         }}
       >
         {/* Address + Number */}
