@@ -141,9 +141,9 @@ export default function HistoryStatsModal({ isOpen, onClose, storeId }: HistoryS
           flexShrink: 0,
         }}
       >
-        {/* ── LEFT PANEL: Στατιστικά & Ιστορικό ── */}
+        {/* ── LEFT PANEL: Στατιστικά & Ιστορικό (κρύβεται στο κινητό όταν ανοίγει η λίστα) ── */}
         <div
-          className="flex flex-col"
+          className={`flex-col ${showOrderList ? 'hidden md:flex' : 'flex'}`}
           style={{
             width: showOrderList ? '50%' : '100%',
             flexShrink: 0,
@@ -476,7 +476,7 @@ export default function HistoryStatsModal({ isOpen, onClose, storeId }: HistoryS
         {/* ── RIGHT PANEL: Αναλυτικό Ιστορικό Παραγγελιών ── */}
         {showOrderList && (
           <div
-            className="flex flex-col flex-1 animate-fade-in"
+            className="flex flex-col flex-1 w-full animate-fade-in"
             style={{ minWidth: 0, overflow: 'hidden' }}
           >
             {/* Header */}
