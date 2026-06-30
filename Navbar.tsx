@@ -1,16 +1,72 @@
 'use client';
 
 import { useTheme } from 'next-themes';
-import { Moon, Sun, LogOut, BarChart3, Store, Volume2, VolumeX } from 'lucide-react';
+import { Moon, Sun, LogOut, BarChart3, Store, Volume2, VolumeX, Snowflake, Zap, Flame } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
 import HistoryStatsModal from './HistoryStatsModal';
 import { useRouter } from 'next/navigation';
+import { useSystemLoad } from './useSystemLoad';
 
 const supabase = createBrowserClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
+
+// ── System Load Badge ─────────────────────────────────────────────────────────
+function SystemLoadBadge() {
+  const { activeCount, load } = useSystemLoad();
+
+  const config = {
+    quiet: {
+      Icon: Snowflake,
+      label: 'Ήσυχα',
+      color: '#60A5FA',
+      bg: 'rgba(96,165,250,0.12)',
+      border: 'rgba(96,165,250,0.35)',
+      glow: 'rgba(96,165,250,0.25)',
+    },
+    moderate: {
+      Icon: Zap,
+      label: 'Μέτρια',
+      color: '#FBBF24',
+      bg: 'rgba(251,191,36,0.12)',
+      border: 'rgba(251,191,36,0.35)',
+      glow: 'rgba(251,191,36,0.25)',
+    },
+    busy: {
+      Icon: Flame,
+      label: 'Πολυάσχολα',
+      color: '#F87171',
+      bg: 'rgba(248,113,113,0.12)',
+      border: 'rgba(248,113,113,0.35)',
+      glow: 'rgba(248,113,113,0.25)',
+    },
+  } as const;
+
+  const { Icon, label, color, bg, border, glow } = config[load];
+
+  return (
+    <div
+      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all duration-500"
+      style={{
+        backgroundColor: bg,
+        border: `1px solid ${border}`,
+        color,
+        boxShadow: `0 0 10px ${glow}`,
+      }}
+      title={`Ενεργές παραγγελίες δικτύου: ${activeCount}`}
+    >
+      <Icon className="w-3.5 h-3.5" />
+      <span className="hidden sm:inline">{label}</span>
+      <span className="font-black tabular-nums" style={{ color }}>
+        {activeCount}
+      </span>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 export default function Navbar({ storeId, storeName }: { storeId: string; storeName: string }) {
   const { theme, setTheme } = useTheme();
@@ -33,9 +89,8 @@ export default function Navbar({ storeId, storeName }: { storeId: string; storeN
     const newState = !isSoundEnabled;
     setIsSoundEnabled(newState);
     localStorage.setItem('soundEnabled', newState.toString());
-    
+
     if (newState) {
-      // Play a tiny beep to unlock the browser's audio engine
       try {
         const audio = new Audio('/notification.mp3');
         audio.volume = 0.1;
@@ -100,6 +155,11 @@ export default function Navbar({ storeId, storeName }: { storeId: string; storeN
                 <Store className="w-3.5 h-3.5" style={{ color: 'var(--accent)' }} />
                 {storeName}
               </div>
+            </div>
+
+            {/* Center: System Load Badge */}
+            <div className="absolute left-1/2 -translate-x-1/2">
+              <SystemLoadBadge />
             </div>
 
             {/* Actions */}
