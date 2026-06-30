@@ -571,56 +571,59 @@ export default function HistoryStatsModal({ isOpen, onClose, storeId }: HistoryS
                         </span>
                       </div>
 
-                      {/* Bottom row: driver, duration, payment */}
-                      <div className="flex flex-wrap items-center gap-2 pt-1" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-                        {/* Driver */}
+                      {/* Bottom: αριστερά οδηγός (κάτω) · δεξιά χρόνος (πάνω) + πληρωμή (κάτω) */}
+                      <div className="flex items-end justify-between gap-2 pt-1" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+                        {/* Driver — κάτω αριστερά */}
                         <div
-                          className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg"
+                          className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg min-w-0"
                           style={{ backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border-default)' }}
                         >
-                          <Car className="w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} />
-                          <span className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>
+                          <Car className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--text-muted)' }} />
+                          <span className="text-xs font-semibold truncate" style={{ color: 'var(--text-secondary)' }}>
                             {order.drivers?.full_name || 'Άγνωστος'}
                           </span>
                         </div>
 
-                        {/* Duration */}
-                        {deliveryMins !== null && (
+                        {/* Δεξιά στήλη: χρόνος (πάνω) + πληρωμή (κάτω) */}
+                        <div className="flex flex-col items-end gap-1.5 shrink-0">
+                          {/* Duration — πάνω δεξιά */}
+                          {deliveryMins !== null && (
+                            <div
+                              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg"
+                              style={{
+                                backgroundColor: deliveryMins < 15 ? 'var(--success-bg)' : deliveryMins < 25 ? 'rgba(251,146,60,0.1)' : 'rgba(167,139,250,0.1)',
+                                border: `1px solid ${deliveryMins < 15 ? 'var(--success-border)' : deliveryMins < 25 ? 'rgba(251,146,60,0.25)' : 'rgba(167,139,250,0.25)'}`,
+                              }}
+                            >
+                              <Clock className="w-3.5 h-3.5" style={{ color: deliveryMins < 15 ? 'var(--success)' : deliveryMins < 25 ? '#fb923c' : '#a78bfa' }} />
+                              <span
+                                className="text-xs font-bold whitespace-nowrap"
+                                style={{ color: deliveryMins < 15 ? 'var(--success)' : deliveryMins < 25 ? '#fb923c' : '#a78bfa' }}
+                              >
+                                {deliveryMins} λεπτά
+                              </span>
+                            </div>
+                          )}
+
+                          {/* Payment — κάτω δεξιά */}
                           <div
                             className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg"
                             style={{
-                              backgroundColor: deliveryMins < 15 ? 'var(--success-bg)' : deliveryMins < 25 ? 'rgba(251,146,60,0.1)' : 'rgba(167,139,250,0.1)',
-                              border: `1px solid ${deliveryMins < 15 ? 'var(--success-border)' : deliveryMins < 25 ? 'rgba(251,146,60,0.25)' : 'rgba(167,139,250,0.25)'}`,
+                              backgroundColor: isCash ? 'rgba(34,197,94,0.1)' : 'rgba(59,130,246,0.1)',
+                              border: `1px solid ${isCash ? 'rgba(34,197,94,0.25)' : 'rgba(59,130,246,0.25)'}`,
                             }}
                           >
-                            <Clock className="w-3.5 h-3.5" style={{ color: deliveryMins < 15 ? 'var(--success)' : deliveryMins < 25 ? '#fb923c' : '#a78bfa' }} />
+                            {isCash
+                              ? <Banknote className="w-3.5 h-3.5" style={{ color: '#22c55e' }} />
+                              : <CreditCard className="w-3.5 h-3.5" style={{ color: '#3b82f6' }} />
+                            }
                             <span
-                              className="text-xs font-bold"
-                              style={{ color: deliveryMins < 15 ? 'var(--success)' : deliveryMins < 25 ? '#fb923c' : '#a78bfa' }}
+                              className="text-xs font-bold whitespace-nowrap"
+                              style={{ color: isCash ? '#22c55e' : '#3b82f6' }}
                             >
-                              {deliveryMins} λεπτά
+                              {isCash ? 'Μετρητά' : 'Κάρτα'}
                             </span>
                           </div>
-                        )}
-
-                        {/* Payment */}
-                        <div
-                          className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg ml-auto"
-                          style={{
-                            backgroundColor: isCash ? 'rgba(34,197,94,0.1)' : 'rgba(59,130,246,0.1)',
-                            border: `1px solid ${isCash ? 'rgba(34,197,94,0.25)' : 'rgba(59,130,246,0.25)'}`,
-                          }}
-                        >
-                          {isCash
-                            ? <Banknote className="w-3.5 h-3.5" style={{ color: '#22c55e' }} />
-                            : <CreditCard className="w-3.5 h-3.5" style={{ color: '#3b82f6' }} />
-                          }
-                          <span
-                            className="text-xs font-bold"
-                            style={{ color: isCash ? '#22c55e' : '#3b82f6' }}
-                          >
-                            {isCash ? 'Μετρητά' : 'Κάρτα'}
-                          </span>
                         </div>
                       </div>
                     </div>
