@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { X, TrendingUp, Clock, Car, BarChart2, Award, List, MapPin, CreditCard, Banknote, ChevronRight } from 'lucide-react';
-import { createBrowserClient } from '@supabase/ssr';
 import { subDays, differenceInMinutes, startOfDay, endOfDay } from 'date-fns';
+import { supabase } from './lib/supabase';
 
 interface HistoryStatsModalProps {
   isOpen: boolean;
@@ -36,11 +36,6 @@ export default function HistoryStatsModal({ isOpen, onClose, storeId }: HistoryS
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
   const [showOrderList, setShowOrderList] = useState(false);
-
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
 
   useEffect(() => {
     if (!isOpen) return;

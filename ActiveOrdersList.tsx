@@ -4,13 +4,8 @@ import { useState, useEffect } from 'react';
 import { useActiveOrders } from './useActiveOrders';
 import { Clock, Map, XCircle, User, MessageSquare, Package, CheckCircle2 } from 'lucide-react';
 import { differenceInMinutes } from 'date-fns';
-import { createBrowserClient } from '@supabase/ssr';
 import DriverMapInline from './DriverMapInline';
-
-const supabase = createBrowserClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+import { supabase } from './lib/supabase';
 
 export default function ActiveOrdersList({ storeId }: { storeId: string }) {
   const { orders, loading } = useActiveOrders(storeId);
@@ -254,12 +249,6 @@ export default function ActiveOrdersList({ storeId }: { storeId: string }) {
                         </div>
                         <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
                           {order.drivers?.full_name || 'Άγνωστος Οδηγός'}
-                        </span>
-                        <span
-                          className="text-xs px-2 py-0.5 rounded-md font-medium"
-                          style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-muted)' }}
-                        >
-                          Ενεργές: 1
                         </span>
                       </div>
                       <button

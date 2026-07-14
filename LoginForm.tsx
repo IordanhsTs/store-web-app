@@ -1,13 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { createBrowserClient } from '@supabase/ssr';
 import { Mail, Lock, LogIn, AlertCircle } from 'lucide-react';
-
-const supabase = createBrowserClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+import { supabase } from './lib/supabase';
 
 export default function LoginForm() {
   const [email, setEmail] = useState('');

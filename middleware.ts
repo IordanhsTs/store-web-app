@@ -1,5 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { AUTH_COOKIE_NAME } from './lib/backends'
+import { getServerBackend } from './lib/supabase-server'
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({
@@ -8,10 +10,14 @@ export async function middleware(request: NextRequest) {
     },
   })
 
+  // Failover: παίρνουμε το ενεργό backend (primary ή standby, με cache 30")
+  const backend = await getServerBackend()
+
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    backend.url,
+    backend.anonKey,
     {
+      cookieOptions: { name: AUTH_COOKIE_NAME },
       cookies: {
         getAll() {
           return request.cookies.getAll()

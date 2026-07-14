@@ -3,15 +3,10 @@
 import { useTheme } from 'next-themes';
 import { Moon, Sun, LogOut, BarChart3, Store, Volume2, VolumeX, Snowflake, Zap, Flame } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { createBrowserClient } from '@supabase/ssr';
 import HistoryStatsModal from './HistoryStatsModal';
 import { useRouter } from 'next/navigation';
 import { useSystemLoad } from './useSystemLoad';
-
-const supabase = createBrowserClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+import { supabase } from './lib/supabase';
 
 // ── System Load Badge ─────────────────────────────────────────────────────────
 function SystemLoadBadge() {

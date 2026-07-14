@@ -1,16 +1,13 @@
 'use client';
 
-import { useState, useRef } from 'react';
-import { useJsApiLoader, Autocomplete } from '@react-google-maps/api';
-import { Banknote, CreditCard, MapPin, Send, Navigation } from 'lucide-react';
-import { createBrowserClient } from '@supabase/ssr';
+import { useState, useRef, useCallback, useEffect } from 'react';
+import { Banknote, CreditCard, MapPin, Send } from 'lucide-react';
+import { supabase } from './lib/supabase';
 
-const libraries: ('places')[] = ['places'];
+type Suggestion = { street: string; context: string };
 
-const supabase = createBrowserClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+const MIN_CHARS = 4;      // δεν ψάχνουμε πριν από τόσα γράμματα
+const DEBOUNCE_MS = 400;  // περιμένουμε να σταματήσει το πληκτρολόγιο
 
 export default function OrderCreationForm({ storeId }: { storeId: string }) {
   const [street, setStreet] = useState('');
@@ -20,26 +17,68 @@ export default function OrderCreationForm({ storeId }: { storeId: string }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
-  const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
+  // ── Autocomplete state ──
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
-  const { isLoaded } = useJsApiLoader({
-    id: 'script-loader',
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY as string,
-    libraries,
-    language: 'el',
-    region: 'GR',
-  });
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  const cacheRef = useRef<Map<string, Suggestion[]>>(new Map());
+  const justSelectedRef = useRef(false);
+
+  useEffect(() => () => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    abortRef.current?.abort();
+  }, []);
 
   const showToast = (message: string, type: 'success' | 'error') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 4000);
   };
 
-  const handlePlaceChanged = () => {
-    if (autocompleteRef.current !== null) {
-      const place = autocompleteRef.current.getPlace();
-      setStreet(place.name || place.formatted_address || '');
+  const fetchSuggestions = useCallback(async (text: string) => {
+    const cached = cacheRef.current.get(text.toLowerCase());
+    if (cached) {
+      setSuggestions(cached);
+      setShowSuggestions(cached.length > 0);
+      return;
     }
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    try {
+      const res = await fetch(`/api/autocomplete?text=${encodeURIComponent(text)}`, {
+        signal: controller.signal,
+      });
+      const data = await res.json();
+      const list: Suggestion[] = data.suggestions || [];
+      cacheRef.current.set(text.toLowerCase(), list);
+      setSuggestions(list);
+      setShowSuggestions(list.length > 0);
+    } catch (e) {
+      if ((e as Error).name !== 'AbortError') console.error(e);
+    }
+  }, []);
+
+  const onStreetChange = (value: string) => {
+    setStreet(value);
+    justSelectedRef.current = false;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    const q = value.trim();
+    if (q.length < MIN_CHARS) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+    debounceRef.current = setTimeout(() => fetchSuggestions(q), DEBOUNCE_MS);
+  };
+
+  const selectSuggestion = (s: Suggestion) => {
+    justSelectedRef.current = true;
+    setStreet(s.street);
+    setSuggestions([]);
+    setShowSuggestions(false);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -70,31 +109,11 @@ export default function OrderCreationForm({ storeId }: { storeId: string }) {
       setStreetNumber('');
       setComments('');
       setPaymentMethod('cash');
+      setSuggestions([]);
+      setShowSuggestions(false);
       showToast('✓ Η παραγγελία δημιουργήθηκε επιτυχώς!', 'success');
     }
   };
-
-  if (!isLoaded) {
-    return (
-      <div
-        className="p-6 rounded-2xl"
-        style={{
-          backgroundColor: 'var(--bg-card)',
-          border: '2px solid var(--accent)',
-          boxShadow: '0 0 0 1px var(--accent-muted), var(--shadow-sm)',
-        }}
-      >
-        <div className="space-y-4">
-          <div className="skeleton h-6 w-32" />
-          <div className="skeleton h-11 w-full" />
-          <div className="skeleton h-11 w-full" />
-          <div className="skeleton h-11 w-full" />
-          <div className="skeleton h-20 w-full" />
-          <div className="skeleton h-12 w-full" />
-        </div>
-      </div>
-    );
-  }
 
   const inputStyle = {
     backgroundColor: 'var(--bg-input)',
@@ -145,50 +164,82 @@ export default function OrderCreationForm({ storeId }: { storeId: string }) {
         }}
       >
         {/* Address + Number */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-1">
           <div className="md:col-span-2 space-y-1.5">
             <label className="block text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
               Οδός
             </label>
             <div className="relative">
-              <Autocomplete
-                onLoad={(autocomplete) => (autocompleteRef.current = autocomplete)}
-                onPlaceChanged={handlePlaceChanged}
-                options={{
-                  bounds: {
-                    south: 40.70,
-                    west: 21.30,
-                    north: 40.85,
-                    east: 21.50,
-                  },
+              <input
+                type="text"
+                placeholder="Αρχίστε να πληκτρολογείτε..."
+                value={street}
+                autoComplete="off"
+                onChange={(e) => onStreetChange(e.target.value)}
+                onFocus={(e) => {
+                  e.target.style.borderColor = 'var(--accent)';
+                  e.target.style.boxShadow = '0 0 0 3px var(--accent-muted)';
+                  if (suggestions.length > 0) setShowSuggestions(true);
                 }}
-              >
-                <input
-                  type="text"
-                  placeholder="Αρχίστε να πληκτρολογείτε..."
-                  value={street}
-                  onChange={(e) => setStreet(e.target.value)}
-                  style={{ ...inputStyle, paddingLeft: '40px' }}
-                  onFocus={e => {
-                    e.target.style.borderColor = 'var(--accent)';
-                    e.target.style.boxShadow = '0 0 0 3px var(--accent-muted)';
-                  }}
-                  onBlur={e => {
-                    e.target.style.borderColor = 'var(--border-default)';
-                    e.target.style.boxShadow = 'none';
-                  }}
-                />
-              </Autocomplete>
+                onBlur={(e) => {
+                  e.target.style.borderColor = 'var(--border-default)';
+                  e.target.style.boxShadow = 'none';
+                  // μικρή καθυστέρηση ώστε να προλάβει το click στην πρόταση
+                  setTimeout(() => setShowSuggestions(false), 150);
+                }}
+                style={{ ...inputStyle, paddingLeft: '40px' }}
+              />
               <MapPin
                 className="w-4 h-4 absolute"
                 style={{
                   color: 'var(--text-muted)',
                   left: '12px',
-                  top: '50%',
+                  top: '25px',
                   transform: 'translateY(-50%)',
                   pointerEvents: 'none',
                 }}
               />
+
+              {/* Dropdown προτάσεων */}
+              {showSuggestions && suggestions.length > 0 && (
+                <ul
+                  className="absolute left-0 right-0 z-50 mt-1 py-1 rounded-xl overflow-hidden"
+                  style={{
+                    backgroundColor: 'var(--bg-card)',
+                    border: '1.5px solid var(--border-default)',
+                    boxShadow: 'var(--shadow-md)',
+                    maxHeight: '260px',
+                    overflowY: 'auto',
+                  }}
+                >
+                  {suggestions.map((s, i) => (
+                    <li
+                      key={`${s.street}-${i}`}
+                      // onMouseDown (όχι onClick) ώστε να προλάβει το blur
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        selectSuggestion(s);
+                      }}
+                      className="flex items-start gap-2 px-3 py-2 cursor-pointer text-sm transition-colors"
+                      style={{ color: 'var(--text-primary)' }}
+                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--bg-input)')}
+                      onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                    >
+                      <MapPin className="w-3.5 h-3.5 shrink-0 mt-0.5" style={{ color: 'var(--accent)' }} />
+                      <span className="flex flex-col min-w-0">
+                        <span className="font-medium leading-snug" style={{ color: 'var(--text-primary)' }}>
+                          {s.street}
+                        </span>
+                        {s.context && (
+                          <span className="text-[11px] leading-snug" style={{ color: 'var(--text-muted)' }}>
+                            {s.context}
+                          </span>
+                        )}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           </div>
           <div className="space-y-1.5">
@@ -212,6 +263,11 @@ export default function OrderCreationForm({ storeId }: { storeId: string }) {
             />
           </div>
         </div>
+
+        {/* Attribution (απαίτηση δωρεάν πλάνου Geoapify) */}
+        <p className="mb-4 text-[10px]" style={{ color: 'var(--text-muted)' }}>
+          Προτάσεις διευθύνσεων: Geoapify · OpenStreetMap
+        </p>
 
         {/* Payment Method */}
         <div className="mb-4 space-y-1.5">

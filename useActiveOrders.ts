@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { createBrowserClient } from '@supabase/ssr';
+import { supabase } from './lib/supabase';
 
 export type Order = {
   id: string;
@@ -21,12 +21,6 @@ export type Order = {
     longitude?: number;
   } | null;
 };
-
-// Initialize Supabase client globally so it's not recreated on every render
-const supabase = createBrowserClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
 
 export function useActiveOrders(storeId: string) {
   const [orders, setOrders] = useState<Order[]>([]);
