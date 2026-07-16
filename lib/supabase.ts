@@ -13,6 +13,7 @@ import {
 } from './backends';
 
 const ACTIVE_CACHE_KEY = 'vertex-active-backend';
+const TENANT_KEY = 'vertex-tenant';   // MULTI-TENANT: το schema της εταιρίας του χρήστη
 const CHECK_INTERVAL_MS = 30000;
 const FAILURES_BEFORE_SWITCH = 2;
 
@@ -26,12 +27,51 @@ function savedIndex(): number {
   }
 }
 
+// MULTI-TENANT: αν λείπει (σημερινό production χωρίς hook) → undefined → schema 'public'.
+function savedTenant(): string | undefined {
+  if (typeof window === 'undefined') return undefined;
+  try {
+    return localStorage.getItem(TENANT_KEY) || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 const activeIndex = savedIndex();
 const active = BACKENDS[activeIndex];
+const tenantSchema = savedTenant();
 
 export const supabase = createBrowserClient(active.url, active.anonKey, {
   cookieOptions: { name: AUTH_COOKIE_NAME },
+  ...(tenantSchema ? { db: { schema: tenantSchema } } : {}),
 });
+
+// Διαβάζει το `tenant` claim από το JWT, το αποθηκεύει, και κάνει reload αν άλλαξε
+// (ώστε ο client να ξαναστηθεί με το σωστό schema). Ίδιο μοτίβο με το failover reload.
+export function applyTenantFromSession(session: { access_token?: string } | null) {
+  if (typeof window === 'undefined' || !session?.access_token) return;
+  try {
+    const b64 = session.access_token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    const claims = JSON.parse(atob(b64));
+    const t = claims.tenant as string | undefined;
+    if (t && t !== savedTenant()) {
+      localStorage.setItem(TENANT_KEY, t);
+      window.location.reload();
+    }
+  } catch (e) {
+    console.error('[tenant] αδυναμία ανάγνωσης claim:', e);
+  }
+}
+
+if (typeof window !== 'undefined') {
+  supabase.auth.onAuthStateChange((event, session) => {
+    if (event === 'SIGNED_OUT') {
+      try { localStorage.removeItem(TENANT_KEY); } catch {}
+      return;
+    }
+    applyTenantFromSession(session);
+  });
+}
 
 function switchTo(index: number, reason: string) {
   if (index === activeIndex || !BACKENDS[index]) return;

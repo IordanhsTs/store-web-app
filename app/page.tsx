@@ -43,8 +43,31 @@ export default async function DashboardPage() {
     redirect('/login');
   }
 
-  // Λήψη δεδομένων καταστήματος
-  const { data: store } = await supabase
+  // MULTI-TENANT: διαβάζουμε το `tenant` claim από το JWT → σωστό schema για τα data queries.
+  // Αν λείπει (σημερινό production χωρίς hook) → schema 'public' (ίδια συμπεριφορά με πριν).
+  const { data: { session } } = await supabase.auth.getSession();
+  let schema: string | undefined;
+  if (session?.access_token) {
+    try {
+      schema = JSON.parse(
+        Buffer.from(session.access_token.split('.')[1], 'base64').toString()
+      ).tenant;
+    } catch {}
+  }
+
+  const db = schema
+    ? createServerClient(backend.url, backend.anonKey, {
+        cookieOptions: { name: AUTH_COOKIE_NAME },
+        cookies: {
+          getAll() { return cookieStore.getAll(); },
+          setAll() {},
+        },
+        db: { schema },
+      })
+    : supabase;
+
+  // Λήψη δεδομένων καταστήματος (στο σωστό schema)
+  const { data: store } = await db
     .from('stores')
     .select('*')
     .eq('id', user.id)
