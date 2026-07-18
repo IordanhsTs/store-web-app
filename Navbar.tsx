@@ -6,36 +6,61 @@ import { useEffect, useState } from 'react';
 import HistoryStatsModal from './HistoryStatsModal';
 import { useRouter } from 'next/navigation';
 import { useSystemLoad } from './useSystemLoad';
-import { supabase } from './lib/supabase';
+import { supabase, getActiveBackend } from './lib/supabase';
+
+// ── Chip κατάστασης συστήματος (Primary/Standby) ─────────────────────────────
+// Ίδια λογική με το delivery-admin: δείχνει σε ποιο backend τρέχουμε.
+function BackendStatusChip() {
+  const onPrimary = getActiveBackend()?.name !== 'standby';
+  return (
+    <div
+      className="hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold mr-1"
+      title={onPrimary ? 'Το σύστημα τρέχει στο κύριο datacenter.' : 'Το σύστημα τρέχει στο εφεδρικό datacenter (failover).'}
+      style={{
+        backgroundColor: onPrimary ? 'var(--success-bg)' : 'var(--warning-bg)',
+        border: `1px solid ${onPrimary ? 'var(--success-border)' : 'var(--warning-border)'}`,
+        color: onPrimary ? 'var(--success)' : 'var(--warning)',
+      }}
+    >
+      <span
+        className="w-2 h-2 rounded-full inline-block"
+        style={{ backgroundColor: onPrimary ? 'var(--success)' : 'var(--warning)' }}
+      />
+      {onPrimary ? 'Primary' : 'Standby'}
+    </div>
+  );
+}
 
 // ── System Load Badge ─────────────────────────────────────────────────────────
 function SystemLoadBadge() {
   const { activeCount, load } = useSystemLoad();
 
+  // Χρώματα από το theme (light/dark αυτόματα) — οι ετικέτες ξεκαθαρίζουν ότι
+  // ο αριθμός αφορά τις ενεργές παραγγελίες όλου του δικτύου, όχι του καταστήματος.
   const config = {
     quiet: {
       Icon: Snowflake,
-      label: 'Χαμηλός Φόρτος',
-      color: '#60A5FA',
-      bg: 'rgba(96,165,250,0.12)',
-      border: 'rgba(96,165,250,0.35)',
-      glow: 'rgba(96,165,250,0.25)',
+      label: 'Ήρεμο δίκτυο',
+      color: 'var(--info)',
+      bg: 'var(--info-bg)',
+      border: 'var(--info-border)',
+      glow: 'var(--info-border)',
     },
     moderate: {
       Icon: Zap,
-      label: 'Μέτριος Φόρτος',
-      color: '#FBBF24',
-      bg: 'rgba(251,191,36,0.12)',
-      border: 'rgba(251,191,36,0.35)',
-      glow: 'rgba(251,191,36,0.25)',
+      label: 'Μέτριος φόρτος δικτύου',
+      color: 'var(--warning)',
+      bg: 'var(--warning-bg)',
+      border: 'var(--warning-border)',
+      glow: 'var(--warning-border)',
     },
     busy: {
       Icon: Flame,
-      label: 'Υψυλός Φόρτος',
-      color: '#F87171',
-      bg: 'rgba(248,113,113,0.12)',
-      border: 'rgba(248,113,113,0.35)',
-      glow: 'rgba(248,113,113,0.25)',
+      label: 'Υψηλός φόρτος δικτύου',
+      color: 'var(--danger)',
+      bg: 'var(--danger-bg)',
+      border: 'var(--danger-border)',
+      glow: 'var(--danger-border)',
     },
   } as const;
 
@@ -164,6 +189,9 @@ export default function Navbar({ storeId, storeName }: { storeId: string; storeN
 
             {/* Actions */}
             <div className="flex items-center gap-1">
+              {/* System status — μετά το mount, γιατί το ενεργό backend έρχεται από localStorage */}
+              {mounted && <BackendStatusChip />}
+
               {/* Stats button */}
               <button
                 onClick={() => setHistoryModalOpen(true)}

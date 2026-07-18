@@ -46,6 +46,11 @@ export const supabase = createBrowserClient(active.url, active.anonKey, {
   ...(tenantSchema ? { db: { schema: tenantSchema } } : {}),
 });
 
+// Για εμφάνιση κατάστασης συστήματος στο UI (chip Primary/Standby στο Navbar).
+export function getActiveBackend() {
+  return active;
+}
+
 // Διαβάζει το `tenant` claim από το JWT, το αποθηκεύει, και κάνει reload αν άλλαξε
 // (ώστε ο client να ξαναστηθεί με το σωστό schema). Ίδιο μοτίβο με το failover reload.
 export function applyTenantFromSession(session: { access_token?: string } | null) {

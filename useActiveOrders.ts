@@ -88,7 +88,23 @@ export function useActiveOrders(storeId: string) {
       )
       .subscribe();
 
-    // 3. Subscribe to driver location updates
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [storeId]);
+
+  // 3. Subscribe to driver location updates — ΜΟΝΟ για τους διανομείς των
+  // ενεργών παραγγελιών του καταστήματος, όχι για όλο τον στόλο. Το κανάλι
+  // ξαναχτίζεται όταν αλλάξει το σύνολο των driver ids (ανάθεση/ολοκλήρωση).
+  const driverIdsKey = Array.from(
+    new Set(orders.map((o) => o.driver_id).filter((id): id is string => !!id))
+  )
+    .sort()
+    .join(',');
+
+  useEffect(() => {
+    if (!driverIdsKey) return;
+
     const driverChannelId = `active_drivers_updates_${storeId}_${Math.random().toString(36).substring(7)}`;
     const driverChannel = supabase
       .channel(driverChannelId)
@@ -98,6 +114,7 @@ export function useActiveOrders(storeId: string) {
           event: 'UPDATE',
           schema: 'public',
           table: 'drivers',
+          filter: `id=in.(${driverIdsKey})`,
         },
         (payload) => {
           const updatedDriver = payload.new;
@@ -121,10 +138,9 @@ export function useActiveOrders(storeId: string) {
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
       supabase.removeChannel(driverChannel);
     };
-  }, [storeId]);
+  }, [storeId, driverIdsKey]);
 
   return { orders, loading };
 }

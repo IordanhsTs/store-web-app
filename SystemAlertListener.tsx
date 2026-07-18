@@ -8,8 +8,8 @@ export default function SystemAlertListener({ storeId }: { storeId: string }) {
   const [alertMessage, setAlertMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    // Audio for notification
-    const alertSound = new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
+    // Τοπικό αρχείο (όχι εξωτερικός πάροχος) — ίδιος ήχος με τις παραγγελίες.
+    const alertSound = new Audio('/notification.mp3');
 
     const channel = supabase
       .channel('system_alerts')
@@ -22,9 +22,13 @@ export default function SystemAlertListener({ storeId }: { storeId: string }) {
           const targets = Array.isArray(data.target_ids) ? data.target_ids : [data.target_id];
           if (targets.includes('all') || targets.includes(storeId)) {
             setAlertMessage(data.message);
-            // Play sound
-            alertSound.currentTime = 0;
-            alertSound.play().catch(e => console.log('Audio play blocked:', e));
+            // Ήχος μόνο αν ο χρήστης δεν έχει σιγάσει τις ειδοποιήσεις (κουμπί στο Navbar)
+            let soundEnabled = true;
+            try { soundEnabled = localStorage.getItem('soundEnabled') !== 'false'; } catch {}
+            if (soundEnabled) {
+              alertSound.currentTime = 0;
+              alertSound.play().catch(e => console.log('Audio play blocked:', e));
+            }
           }
         }
       })
