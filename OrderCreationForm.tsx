@@ -6,8 +6,12 @@ import { supabase } from './lib/supabase';
 
 type Suggestion = { street: string; context: string };
 
-const MIN_CHARS = 4;      // δεν ψάχνουμε πριν από τόσα γράμματα
-const DEBOUNCE_MS = 400;  // περιμένουμε να σταματήσει το πληκτρολόγιο
+const MIN_CHARS = 3;      // δεν ψάχνουμε πριν από τόσα γράμματα (όσα δέχεται και το API route)
+const DEBOUNCE_MS = 200;  // περιμένουμε να σταματήσει το πληκτρολόγιο
+
+// Σύγκριση χωρίς τόνους/κεφαλαία (και ς→σ) για το τοπικό φιλτράρισμα.
+const norm = (s: string) =>
+  s.toLowerCase().replace(/ς/g, 'σ').normalize('NFD').replace(/[̀-ͯ]/g, '');
 
 export default function OrderCreationForm({ storeId }: { storeId: string }) {
   const [street, setStreet] = useState('');
@@ -60,6 +64,20 @@ export default function OrderCreationForm({ storeId }: { storeId: string }) {
     }
   }, []);
 
+  // Άμεσες προτάσεις από το cache: βρίσκουμε το μεγαλύτερο ήδη-κατεβασμένο
+  // πρόθεμα του q και φιλτράρουμε τοπικά. Έτσι το dropdown ενημερώνεται
+  // ακαριαία σε κάθε πλήκτρο, και το (debounced) fetch απλώς το επιβεβαιώνει.
+  const localMatches = (q: string): Suggestion[] | null => {
+    for (let len = q.length; len >= MIN_CHARS; len--) {
+      const cached = cacheRef.current.get(q.slice(0, len).toLowerCase());
+      if (cached) {
+        const nq = norm(q);
+        return cached.filter((s) => norm(s.street).includes(nq));
+      }
+    }
+    return null;
+  };
+
   const onStreetChange = (value: string) => {
     setStreet(value);
     justSelectedRef.current = false;
@@ -69,6 +87,11 @@ export default function OrderCreationForm({ storeId }: { storeId: string }) {
       setSuggestions([]);
       setShowSuggestions(false);
       return;
+    }
+    const local = localMatches(q);
+    if (local) {
+      setSuggestions(local);
+      setShowSuggestions(local.length > 0);
     }
     debounceRef.current = setTimeout(() => fetchSuggestions(q), DEBOUNCE_MS);
   };
