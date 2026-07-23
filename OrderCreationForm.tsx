@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { Banknote, CreditCard, MapPin, Send } from 'lucide-react';
-import { supabase } from './lib/supabase';
+import { Banknote, CreditCard, MapPin, Send, Lock } from 'lucide-react';
+import { supabase, isReadOnly } from './lib/supabase';
 
 type Suggestion = { street: string; context: string };
 
@@ -20,6 +20,8 @@ export default function OrderCreationForm({ storeId }: { storeId: string }) {
   const [comments, setComments] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  // READ-ONLY-ON-FAILOVER: σε standby κλείνουμε τη δημιουργία παραγγελίας (μετά το mount).
+  const [readOnly, setReadOnly] = useState(false);
 
   // ── Autocomplete state ──
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
@@ -33,6 +35,10 @@ export default function OrderCreationForm({ storeId }: { storeId: string }) {
   useEffect(() => () => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     abortRef.current?.abort();
+  }, []);
+
+  useEffect(() => {
+    setReadOnly(isReadOnly());
   }, []);
 
   const showToast = (message: string, type: 'success' | 'error') => {
@@ -106,6 +112,10 @@ export default function OrderCreationForm({ storeId }: { storeId: string }) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (readOnly) {
+      showToast('Εφεδρική λειτουργία — προσωρινά μόνο ανάγνωση. Δοκιμάστε ξανά μόλις αποκατασταθεί το κύριο σύστημα.', 'error');
+      return;
+    }
     if (!street) {
       showToast('Παρακαλώ εισάγετε διεύθυνση παράδοσης.', 'error');
       return;
@@ -372,28 +382,36 @@ export default function OrderCreationForm({ storeId }: { storeId: string }) {
         {/* Submit */}
         <button
           type="submit"
-          disabled={isSubmitting}
+          disabled={isSubmitting || readOnly}
+          title={readOnly ? 'Προσωρινά μη διαθέσιμο — εφεδρική λειτουργία (μόνο ανάγνωση)' : undefined}
           className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold text-white transition-all duration-200"
           style={{
-            background: isSubmitting
+            background: readOnly
+              ? 'var(--text-muted)'
+              : isSubmitting
               ? 'var(--accent-hover)'
               : 'linear-gradient(135deg, var(--accent), var(--accent-hover))',
-            boxShadow: isSubmitting ? 'none' : '0 4px 16px var(--accent-muted)',
-            opacity: isSubmitting ? 0.75 : 1,
-            cursor: isSubmitting ? 'not-allowed' : 'pointer',
+            boxShadow: isSubmitting || readOnly ? 'none' : '0 4px 16px var(--accent-muted)',
+            opacity: isSubmitting || readOnly ? 0.75 : 1,
+            cursor: isSubmitting || readOnly ? 'not-allowed' : 'pointer',
           }}
           onMouseEnter={e => {
-            if (!isSubmitting) {
+            if (!isSubmitting && !readOnly) {
               (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-1px)';
               (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 8px 24px var(--accent-muted)';
             }
           }}
           onMouseLeave={e => {
             (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(0)';
-            (e.currentTarget as HTMLButtonElement).style.boxShadow = isSubmitting ? 'none' : '0 4px 16px var(--accent-muted)';
+            (e.currentTarget as HTMLButtonElement).style.boxShadow = isSubmitting || readOnly ? 'none' : '0 4px 16px var(--accent-muted)';
           }}
         >
-          {isSubmitting ? (
+          {readOnly ? (
+            <>
+              <Lock className="w-4 h-4" />
+              Προσωρινά μη διαθέσιμο
+            </>
+          ) : isSubmitting ? (
             <>
               <div className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
               Αποστολή...

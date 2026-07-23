@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Bell, CheckCircle2 } from 'lucide-react';
-import { supabase } from './lib/supabase';
+import { supabase, getTenantSchema } from './lib/supabase';
 
 export default function SystemAlertListener({ storeId }: { storeId: string }) {
   const [alertMessage, setAlertMessage] = useState<string | null>(null);
@@ -36,7 +36,7 @@ export default function SystemAlertListener({ storeId }: { storeId: string }) {
 
     const statusChannel = supabase
       .channel(`store_status_${storeId}`)
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'stores', filter: `id=eq.${storeId}` }, async (payload) => {
+      .on('postgres_changes', { event: 'UPDATE', schema: getTenantSchema(), table: 'stores', filter: `id=eq.${storeId}` }, async (payload) => {
         if (payload.new && payload.new.is_blocked === true) {
           alert('Η πρόσβαση στο λογαριασμό σας έχει διακοπεί από το διαχειριστή.');
           await supabase.auth.signOut();

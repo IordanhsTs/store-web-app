@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { supabase } from './lib/supabase';
+import { supabase, getTenantSchema } from './lib/supabase';
 
 export type SystemLoad = 'quiet' | 'moderate' | 'busy';
 
@@ -22,7 +22,7 @@ export function useSystemLoad() {
 
     const channel = supabase
       .channel('system_load_counter')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => {
+      .on('postgres_changes', { event: '*', schema: getTenantSchema(), table: 'orders' }, () => {
         fetchCount();
       })
       .subscribe();

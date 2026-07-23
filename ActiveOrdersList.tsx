@@ -5,18 +5,24 @@ import { useActiveOrders } from './useActiveOrders';
 import { Clock, Map, XCircle, User, MessageSquare, Package, CheckCircle2 } from 'lucide-react';
 import { differenceInMinutes } from 'date-fns';
 import DriverMapInline from './DriverMapInline';
-import { supabase } from './lib/supabase';
+import { supabase, isReadOnly } from './lib/supabase';
 
 export default function ActiveOrdersList({ storeId }: { storeId: string }) {
   const { orders, loading } = useActiveOrders(storeId);
   const [now, setNow] = useState(new Date());
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
+  // READ-ONLY-ON-FAILOVER: σε standby δεν επιτρέπουμε ακύρωση παραγγελίας.
+  const [readOnly, setReadOnly] = useState(false);
 
   // Ανανέωση του ρολογιού κάθε 60 δευτερόλεπτα
   useEffect(() => {
     const interval = setInterval(() => setNow(new Date()), 60000);
     return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    setReadOnly(isReadOnly());
   }, []);
 
   const showToast = (message: string, type: 'success' | 'error') => {
@@ -25,6 +31,10 @@ export default function ActiveOrdersList({ storeId }: { storeId: string }) {
   };
 
   const handleCancel = async (orderId: string) => {
+    if (readOnly) {
+      showToast('Εφεδρική λειτουργία — προσωρινά μόνο ανάγνωση.', 'error');
+      return;
+    }
     if (!confirm('Είστε σίγουροι ότι θέλετε να ακυρώσετε την παραγγελία;')) return;
     const { error } = await supabase.from('orders').update({ status: 'cancelled' }).eq('id', orderId);
     if (!error) {
@@ -225,10 +235,17 @@ export default function ActiveOrdersList({ storeId }: { storeId: string }) {
                       </span>
                       <button
                         onClick={() => handleCancel(order.id)}
+                        disabled={readOnly}
+                        title={readOnly ? 'Προσωρινά μη διαθέσιμο — εφεδρική λειτουργία' : undefined}
                         className="flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-lg transition-all duration-150"
-                        style={{ color: 'var(--danger)', backgroundColor: 'transparent' }}
+                        style={{
+                          color: 'var(--danger)',
+                          backgroundColor: 'transparent',
+                          opacity: readOnly ? 0.4 : 1,
+                          cursor: readOnly ? 'not-allowed' : 'pointer',
+                        }}
                         onMouseEnter={e => {
-                          (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'var(--danger-bg)';
+                          if (!readOnly) (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'var(--danger-bg)';
                         }}
                         onMouseLeave={e => {
                           (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'transparent';

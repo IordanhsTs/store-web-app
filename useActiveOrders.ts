@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { supabase } from './lib/supabase';
+import { supabase, getTenantSchema } from './lib/supabase';
 
 export type Order = {
   id: string;
@@ -57,7 +57,7 @@ export function useActiveOrders(storeId: string) {
         'postgres_changes',
         {
           event: '*',
-          schema: 'public',
+          schema: getTenantSchema(),
           table: 'orders',
           filter: `store_id=eq.${storeId}`,
         },
@@ -112,7 +112,7 @@ export function useActiveOrders(storeId: string) {
         'postgres_changes',
         {
           event: 'UPDATE',
-          schema: 'public',
+          schema: getTenantSchema(),
           table: 'drivers',
           filter: `id=in.(${driverIdsKey})`,
         },

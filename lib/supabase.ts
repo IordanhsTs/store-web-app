@@ -51,6 +51,21 @@ export function getActiveBackend() {
   return active;
 }
 
+// MULTI-TENANT: το schema στο οποίο ζουν τα δεδομένα του χρήστη. Τα realtime κανάλια
+// ΠΡΕΠΕΙ να το χρησιμοποιούν (όχι καρφωτό 'public'), αλλιώς σε co_* tenant τα live
+// updates σπάνε σιωπηλά. Fallback 'public' → backward-compatible με το σημερινό setup.
+export function getTenantSchema(): string {
+  return tenantSchema || 'public';
+}
+
+// READ-ONLY-ON-FAILOVER: όταν τρέχουμε στο εφεδρικό (standby), οι εγγραφές πρέπει να
+// είναι κλειστές — το standby δέχεται ΜΟΝΟ αναγνώσεις κατά τη βλάβη, ώστε να μην
+// αποκλίνουν τα δεδομένα (βλ. failover data-safety). Η μετάβαση κάνει reload, οπότε
+// η τιμή είναι σταθερή ανά φόρτωση σελίδας.
+export function isReadOnly(): boolean {
+  return getActiveBackend()?.name === 'standby';
+}
+
 // Διαβάζει το `tenant` claim από το JWT, το αποθηκεύει, και κάνει reload αν άλλαξε
 // (ώστε ο client να ξαναστηθεί με το σωστό schema). Ίδιο μοτίβο με το failover reload.
 export function applyTenantFromSession(session: { access_token?: string } | null) {
