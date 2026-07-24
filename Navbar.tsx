@@ -144,7 +144,7 @@ export default function Navbar({ storeId, storeName }: { storeId: string; storeN
             <div className="flex items-center gap-4">
               <button
                 type="button"
-                onClick={() => window.location.reload()}
+                onClick={() => router.refresh()}
                 className="flex items-center gap-2.5 cursor-pointer transition-opacity hover:opacity-80 active:opacity-60"
                 title="Ανανέωση σελίδας"
               >

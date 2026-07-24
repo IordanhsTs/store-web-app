@@ -2,15 +2,16 @@
 
 import { useState, useEffect } from 'react';
 import { useActiveOrders } from './useActiveOrders';
-import { Clock, Map, XCircle, User, MessageSquare, Package, CheckCircle2 } from 'lucide-react';
+import { Clock, Map, XCircle, User, MessageSquare, Package } from 'lucide-react';
 import { differenceInMinutes } from 'date-fns';
+import { toast } from 'sonner';
 import DriverMapInline from './DriverMapInline';
 import { supabase, isReadOnly } from './lib/supabase';
+import { confirmDialog } from './ConfirmDialog';
 
 export default function ActiveOrdersList({ storeId }: { storeId: string }) {
   const { orders, loading } = useActiveOrders(storeId);
   const [now, setNow] = useState(new Date());
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   // READ-ONLY-ON-FAILOVER: σε standby δεν επιτρέπουμε ακύρωση παραγγελίας.
   const [readOnly, setReadOnly] = useState(false);
@@ -25,50 +26,27 @@ export default function ActiveOrdersList({ storeId }: { storeId: string }) {
     setReadOnly(isReadOnly());
   }, []);
 
-  const showToast = (message: string, type: 'success' | 'error') => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 4000);
-  };
-
   const handleCancel = async (orderId: string) => {
     if (readOnly) {
-      showToast('Εφεδρική λειτουργία — προσωρινά μόνο ανάγνωση.', 'error');
+      toast.error('Εφεδρική λειτουργία — προσωρινά μόνο ανάγνωση.');
       return;
     }
-    if (!confirm('Είστε σίγουροι ότι θέλετε να ακυρώσετε την παραγγελία;')) return;
+    const confirmed = await confirmDialog('Είστε σίγουροι ότι θέλετε να ακυρώσετε την παραγγελία;', { danger: true, confirmLabel: 'Ακύρωση παραγγελίας' });
+    if (!confirmed) return;
     const { error } = await supabase.from('orders').update({ status: 'cancelled' }).eq('id', orderId);
     if (!error) {
-      showToast('Η παραγγελία ακυρώθηκε.', 'success');
+      toast.success('Η παραγγελία ακυρώθηκε.');
     } else {
-      showToast('Αποτυχία ακύρωσης. Δοκιμάστε ξανά.', 'error');
+      toast.error('Αποτυχία ακύρωσης. Δοκιμάστε ξανά.');
     }
   };
 
-  /* ── Τίτλος + inline μήνυμα (στην ίδια γραμμή, χωρίς αναδίπλωση) ── */
+  /* ── Τίτλος ── */
   const header = (
     <div className="mb-6 flex items-center gap-3 min-w-0">
       <h1 className="text-2xl font-bold tracking-tight shrink-0" style={{ color: 'var(--text-primary)' }}>
         Ενεργές Παραγγελίες
       </h1>
-      {toast && (
-        <div
-          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap animate-fade-in min-w-0"
-          style={{
-            backgroundColor: toast.type === 'success' ? 'var(--success-bg)' : 'var(--danger-bg)',
-            border: `1px solid ${toast.type === 'success' ? 'var(--success-border)' : 'var(--danger-border)'}`,
-            color: toast.type === 'success' ? 'var(--success)' : 'var(--danger)',
-          }}
-        >
-          {toast.type === 'success' && <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />}
-          <span className="truncate">{toast.message}</span>
-          <button
-            onClick={() => setToast(null)}
-            className="opacity-60 hover:opacity-100 transition-opacity shrink-0"
-          >
-            ✕
-          </button>
-        </div>
-      )}
     </div>
   );
 
@@ -273,7 +251,7 @@ export default function ActiveOrdersList({ storeId }: { storeId: string }) {
                           if (order.drivers?.latitude && order.drivers?.longitude) {
                             setExpandedOrderId(prev => prev === order.id ? null : order.id);
                           } else {
-                            showToast('Δεν υπάρχει διαθέσιμη τοποθεσία για αυτόν τον οδηγό.', 'error');
+                            toast.error('Δεν υπάρχει διαθέσιμη τοποθεσία για αυτόν τον οδηγό.');
                           }
                         }}
                         className="flex items-center gap-1.5 text-sm font-semibold px-3 py-1.5 rounded-lg transition-all duration-150"

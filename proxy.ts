@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { AUTH_COOKIE_NAME } from './lib/backends'
 import { getServerBackend } from './lib/supabase-server'
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   let response = NextResponse.next({
     request: {
       headers: request.headers,

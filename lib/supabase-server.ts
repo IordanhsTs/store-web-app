@@ -1,4 +1,4 @@
-// Επιλογή ενεργού backend για server-side κώδικα (middleware, server components).
+// Επιλογή ενεργού backend για server-side κώδικα (proxy, server components).
 // Το αποτέλεσμα κρατιέται σε cache 30" ώστε να μην ελέγχουμε σε κάθε request.
 
 import { BACKENDS, type Backend, isHealthy, readRemoteConfig } from './backends';

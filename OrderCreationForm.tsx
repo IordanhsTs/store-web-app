@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { Banknote, CreditCard, MapPin, Send, Lock } from 'lucide-react';
+import { toast } from 'sonner';
 import { supabase, isReadOnly } from './lib/supabase';
 
 type Suggestion = { street: string; context: string };
@@ -19,7 +20,6 @@ export default function OrderCreationForm({ storeId }: { storeId: string }) {
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card'>('cash');
   const [comments, setComments] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   // READ-ONLY-ON-FAILOVER: σε standby κλείνουμε τη δημιουργία παραγγελίας (μετά το mount).
   const [readOnly, setReadOnly] = useState(false);
 
@@ -40,11 +40,6 @@ export default function OrderCreationForm({ storeId }: { storeId: string }) {
   useEffect(() => {
     setReadOnly(isReadOnly());
   }, []);
-
-  const showToast = (message: string, type: 'success' | 'error') => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 4000);
-  };
 
   const fetchSuggestions = useCallback(async (text: string) => {
     const cached = cacheRef.current.get(text.toLowerCase());
@@ -113,11 +108,11 @@ export default function OrderCreationForm({ storeId }: { storeId: string }) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (readOnly) {
-      showToast('Εφεδρική λειτουργία — προσωρινά μόνο ανάγνωση. Δοκιμάστε ξανά μόλις αποκατασταθεί το κύριο σύστημα.', 'error');
+      toast.error('Εφεδρική λειτουργία — προσωρινά μόνο ανάγνωση. Δοκιμάστε ξανά μόλις αποκατασταθεί το κύριο σύστημα.');
       return;
     }
     if (!street) {
-      showToast('Παρακαλώ εισάγετε διεύθυνση παράδοσης.', 'error');
+      toast.error('Παρακαλώ εισάγετε διεύθυνση παράδοσης.');
       return;
     }
 
@@ -136,7 +131,7 @@ export default function OrderCreationForm({ storeId }: { storeId: string }) {
 
     if (error) {
       console.error(error);
-      showToast('Αποτυχία δημιουργίας παραγγελίας. Δοκιμάστε ξανά.', 'error');
+      toast.error('Αποτυχία δημιουργίας παραγγελίας. Δοκιμάστε ξανά.');
     } else {
       setStreet('');
       setStreetNumber('');
@@ -144,7 +139,7 @@ export default function OrderCreationForm({ storeId }: { storeId: string }) {
       setPaymentMethod('cash');
       setSuggestions([]);
       setShowSuggestions(false);
-      showToast('✓ Η παραγγελία δημιουργήθηκε επιτυχώς!', 'success');
+      toast.success('Η παραγγελία δημιουργήθηκε επιτυχώς!');
     }
   };
 
@@ -162,29 +157,11 @@ export default function OrderCreationForm({ storeId }: { storeId: string }) {
 
   return (
     <>
-      {/* Τίτλος + inline μήνυμα (στην ίδια γραμμή, χωρίς αναδίπλωση) */}
+      {/* Τίτλος */}
       <div className="mb-6 flex items-center gap-3 min-w-0">
         <h1 className="text-2xl font-bold tracking-tight shrink-0" style={{ color: 'var(--text-primary)' }}>
           Νέα Παραγγελία
         </h1>
-        {toast && (
-          <div
-            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap animate-fade-in min-w-0"
-            style={{
-              backgroundColor: toast.type === 'success' ? 'var(--success-bg)' : 'var(--danger-bg)',
-              border: `1px solid ${toast.type === 'success' ? 'var(--success-border)' : 'var(--danger-border)'}`,
-              color: toast.type === 'success' ? 'var(--success)' : 'var(--danger)',
-            }}
-          >
-            <span className="truncate">{toast.message}</span>
-            <button
-              onClick={() => setToast(null)}
-              className="opacity-60 hover:opacity-100 transition-opacity shrink-0"
-            >
-              ✕
-            </button>
-          </div>
-        )}
       </div>
 
       <form
