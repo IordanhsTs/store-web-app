@@ -129,7 +129,16 @@ export default async function DashboardPage() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
         {/* Order creation panel */}
         <div className="lg:col-span-5 xl:col-span-4 animate-fade-in-up" style={{ animationDelay: '0ms' }}>
-          <OrderCreationForm storeId={store.id} />
+          {/* Η φόρμα χρειάζεται ΚΑΙ τη διεύθυνση/συντεταγμένες του καταστήματος: είναι η
+              αφετηρία για τον υπολογισμό απόστασης (όριο 15χλμ + επιπλέον χρέωση). */}
+          <OrderCreationForm
+            store={{
+              id: store.id,
+              address: store.address ?? null,
+              latitude: store.latitude ?? null,
+              longitude: store.longitude ?? null,
+            }}
+          />
         </div>
 
         {/* Active orders panel */}

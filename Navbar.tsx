@@ -1,9 +1,10 @@
 'use client';
 
 import { useTheme } from 'next-themes';
-import { Moon, Sun, LogOut, BarChart3, Store, Volume2, VolumeX, Snowflake, Zap, Flame } from 'lucide-react';
+import { Moon, Sun, LogOut, BarChart3, Store, Volume2, VolumeX, Snowflake, Zap, Flame, MessageSquare } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import HistoryStatsModal from './HistoryStatsModal';
+import ContactAdminModal from './ContactAdminModal';
 import { useRouter } from 'next/navigation';
 import { useSystemLoad } from './useSystemLoad';
 import { supabase, getActiveBackend } from './lib/supabase';
@@ -32,39 +33,43 @@ function BackendStatusChip() {
 }
 
 // ── System Load Badge ─────────────────────────────────────────────────────────
+// Ο πελάτης ζήτησε να φαίνεται ο ΦΟΡΤΟΣ αλλά ΟΧΙ ο αριθμός παραγγελιών — με την
+// ίδια κλιμάκωση (5+ / 10+ / 15+). Δείχνουμε λοιπόν μόνο ετικέτα επιπέδου.
 function SystemLoadBadge() {
-  const { activeCount, load } = useSystemLoad();
+  const { load } = useSystemLoad();
 
-  // Χρώματα από το theme (light/dark αυτόματα) — οι ετικέτες ξεκαθαρίζουν ότι
-  // ο αριθμός αφορά τις ενεργές παραγγελίες όλου του δικτύου, όχι του καταστήματος.
   const config = {
     quiet: {
       Icon: Snowflake,
-      label: 'Ήρεμο δίκτυο',
+      label: 'Χαμηλός φόρτος',
       color: 'var(--info)',
       bg: 'var(--info-bg)',
       border: 'var(--info-border)',
-      glow: 'var(--info-border)',
     },
     moderate: {
       Icon: Zap,
-      label: 'Μέτριος φόρτος δικτύου',
-      color: 'var(--warning)',
-      bg: 'var(--warning-bg)',
-      border: 'var(--warning-border)',
-      glow: 'var(--warning-border)',
+      label: 'Μέτριος φόρτος',
+      color: 'var(--success)',
+      bg: 'var(--success-bg)',
+      border: 'var(--success-border)',
     },
     busy: {
       Icon: Flame,
-      label: 'Υψηλός φόρτος δικτύου',
+      label: 'Υψηλός φόρτος',
+      color: 'var(--warning)',
+      bg: 'var(--warning-bg)',
+      border: 'var(--warning-border)',
+    },
+    very_busy: {
+      Icon: Flame,
+      label: 'Πολύ υψηλός φόρτος',
       color: 'var(--danger)',
       bg: 'var(--danger-bg)',
       border: 'var(--danger-border)',
-      glow: 'var(--danger-border)',
     },
   } as const;
 
-  const { Icon, label, color, bg, border, glow } = config[load];
+  const { Icon, label, color, bg, border } = config[load];
 
   return (
     <div
@@ -73,15 +78,12 @@ function SystemLoadBadge() {
         backgroundColor: bg,
         border: `1px solid ${border}`,
         color,
-        boxShadow: `0 0 10px ${glow}`,
+        boxShadow: `0 0 10px ${border}`,
       }}
-      title={`Ενεργές παραγγελίες δικτύου: ${activeCount}`}
+      title="Φόρτος εργασίας του δικτύου διανομής"
     >
       <Icon className="w-3.5 h-3.5" />
-      <span className="hidden sm:inline">{label}</span>
-      <span className="font-black tabular-nums" style={{ color }}>
-        {activeCount}
-      </span>
+      <span>{label}</span>
     </div>
   );
 }
@@ -92,6 +94,7 @@ export default function Navbar({ storeId, storeName }: { storeId: string; storeN
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   const [isHistoryModalOpen, setHistoryModalOpen] = useState(false);
+  const [isContactModalOpen, setContactModalOpen] = useState(false);
   const router = useRouter();
 
   const [isSoundEnabled, setIsSoundEnabled] = useState(true);
@@ -191,6 +194,24 @@ export default function Navbar({ storeId, storeName }: { storeId: string; storeN
             <div className="flex items-center gap-1">
               {/* System status — μετά το mount, γιατί το ενεργό backend έρχεται από localStorage */}
               {mounted && <BackendStatusChip />}
+
+              {/* Μήνυμα στον διαχειριστή */}
+              <button
+                onClick={() => setContactModalOpen(true)}
+                className="p-2 rounded-lg transition-all duration-150"
+                style={{ color: 'var(--text-muted)' }}
+                onMouseEnter={e => {
+                  (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'var(--accent-muted)';
+                  (e.currentTarget as HTMLButtonElement).style.color = 'var(--accent)';
+                }}
+                onMouseLeave={e => {
+                  (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'transparent';
+                  (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-muted)';
+                }}
+                title="Μήνυμα στο κέντρο ελέγχου"
+              >
+                <MessageSquare className="w-5 h-5" />
+              </button>
 
               {/* Stats button */}
               <button
@@ -299,6 +320,12 @@ export default function Navbar({ storeId, storeName }: { storeId: string; storeN
       <HistoryStatsModal
         isOpen={isHistoryModalOpen}
         onClose={() => setHistoryModalOpen(false)}
+        storeId={storeId}
+      />
+
+      <ContactAdminModal
+        isOpen={isContactModalOpen}
+        onClose={() => setContactModalOpen(false)}
         storeId={storeId}
       />
     </>

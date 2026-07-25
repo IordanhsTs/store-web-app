@@ -3,7 +3,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { supabase, getTenantSchema } from './lib/supabase';
 
-export type SystemLoad = 'quiet' | 'moderate' | 'busy';
+export type SystemLoad = 'quiet' | 'moderate' | 'busy' | 'very_busy';
+
+// Κατώφλια φόρτου δικτύου. Ο πελάτης ζήτησε να ΜΗΝ φαίνεται ο αριθμός παραγγελιών,
+// αλλά να μείνει η ίδια λογική κλιμάκωσης: 5+ / 10+ / 15+.
+const THRESHOLDS = { moderate: 5, busy: 10, veryBusy: 15 };
 
 // Κάθε αλλαγή σε παραγγελία (νέα, ανάθεση διανομέα, αλλαγή status, ολοκλήρωση)
 // στέλνει realtime event. Σε ώρα αιχμής έρχονται σε ριπές και το καθένα ξεκινούσε
@@ -49,7 +53,12 @@ export function useSystemLoad() {
   }, []);
 
   const load: SystemLoad =
-    activeCount <= 5 ? 'quiet' : activeCount <= 10 ? 'moderate' : 'busy';
+    activeCount >= THRESHOLDS.veryBusy ? 'very_busy'
+    : activeCount >= THRESHOLDS.busy ? 'busy'
+    : activeCount >= THRESHOLDS.moderate ? 'moderate'
+    : 'quiet';
 
+  // Το activeCount εξακολουθεί να επιστρέφεται (χρήσιμο για debugging/tooltip),
+  // αλλά το UI δείχνει πλέον ΜΟΝΟ την ετικέτα επιπέδου.
   return { activeCount, load };
 }

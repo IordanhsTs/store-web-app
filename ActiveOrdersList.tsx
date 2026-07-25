@@ -1,13 +1,23 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useActiveOrders } from './useActiveOrders';
-import { Clock, Map, XCircle, User, MessageSquare, Package } from 'lucide-react';
+import { useActiveOrders, type Order } from './useActiveOrders';
+// Το εικονίδιο «Map» του lucide μετονομάζεται: αλλιώς σκιάζει τον global Map constructor.
+import { Clock, Map as MapIcon, XCircle, User, MessageSquare, Package, Phone, Route, Timer } from 'lucide-react';
 import { differenceInMinutes } from 'date-fns';
 import { toast } from 'sonner';
 import DriverMapInline from './DriverMapInline';
 import { supabase, isReadOnly } from './lib/supabase';
 import { confirmDialog } from './ConfirmDialog';
+import { formatKm, formatEuro } from './lib/distance';
+
+/** «3:41» — υπόλοιπο μέχρι την αποστολή μιας προγραμματισμένης παραγγελίας. */
+function formatCountdown(ms: number): string {
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
 
 export default function ActiveOrdersList({ storeId }: { storeId: string }) {
   const { orders, loading } = useActiveOrders(storeId);
@@ -16,11 +26,14 @@ export default function ActiveOrdersList({ storeId }: { storeId: string }) {
   // READ-ONLY-ON-FAILOVER: σε standby δεν επιτρέπουμε ακύρωση παραγγελίας.
   const [readOnly, setReadOnly] = useState(false);
 
-  // Ανανέωση του ρολογιού κάθε 60 δευτερόλεπτα
+  const hasScheduled = orders.some((o) => o.status === 'scheduled');
+
+  // Το ρολόι χτυπά ανά δευτερόλεπτο ΜΟΝΟ όσο υπάρχει αντίστροφη μέτρηση να δείξουμε·
+  // αλλιώς ανά λεπτό, όσο χρειάζεται για τους χρόνους αναμονής.
   useEffect(() => {
-    const interval = setInterval(() => setNow(new Date()), 60000);
+    const interval = setInterval(() => setNow(new Date()), hasScheduled ? 1000 : 60000);
     return () => clearInterval(interval);
-  }, []);
+  }, [hasScheduled]);
 
   useEffect(() => {
     setReadOnly(isReadOnly());
@@ -40,6 +53,13 @@ export default function ActiveOrdersList({ storeId }: { storeId: string }) {
       toast.error('Αποτυχία ακύρωσης. Δοκιμάστε ξανά.');
     }
   };
+
+  // ── Αρίθμηση ανά κατάσταση (αίτημα πελάτη: «1 2 3 ενεργές και 1 2 3 αποδεκτές») ──
+  // Απλή θέση μέσα στη λίστα της κάθε κατάστασης, ΟΧΙ μόνιμος κωδικός παραγγελίας.
+  const positions = new Map<string, number>();
+  (['scheduled', 'pending', 'accepted'] as const).forEach((status) => {
+    orders.filter((o) => o.status === status).forEach((o, i) => positions.set(o.id, i + 1));
+  });
 
   /* ── Τίτλος ── */
   const header = (
@@ -120,10 +140,14 @@ export default function ActiveOrdersList({ storeId }: { storeId: string }) {
       {header}
 
       <div className="space-y-4 stagger">
-        {orders.map((order) => {
-          const minutesElapsed = differenceInMinutes(now, new Date(order.created_at));
-          const isLate = order.status === 'pending' && minutesElapsed > 9;
+        {orders.map((order: Order) => {
+          const minutesElapsed = Math.max(0, differenceInMinutes(now, new Date(order.created_at)));
           const isPending = order.status === 'pending';
+          const isScheduled = order.status === 'scheduled';
+          const isLate = isPending && minutesElapsed > 9;
+          const remainingMs = order.scheduled_at
+            ? new Date(order.scheduled_at).getTime() - now.getTime()
+            : 0;
 
           return (
             <div
@@ -140,7 +164,9 @@ export default function ActiveOrdersList({ storeId }: { storeId: string }) {
               <div
                 className="absolute left-0 top-0 bottom-0 w-1.5 opacity-90 transition-opacity group-hover:opacity-100"
                 style={{
-                  background: isLate
+                  background: isScheduled
+                    ? 'var(--text-muted)'
+                    : isLate
                     ? 'var(--danger)'
                     : isPending
                     ? 'linear-gradient(180deg, var(--accent), var(--accent-hover))'
@@ -154,36 +180,72 @@ export default function ActiveOrdersList({ storeId }: { storeId: string }) {
                 <div className="flex justify-between items-start gap-3 mb-2">
                   <div className="flex-1 min-w-0">
                     <h3
-                      className="text-base font-bold truncate mb-1"
+                      className="text-base font-bold truncate mb-1 flex items-center gap-2"
                       style={{ color: 'var(--text-primary)' }}
                     >
-                      {order.address}
+                      {/* Αύξων αριθμός θέσης μέσα στη λίστα της κατάστασής της */}
+                      <span
+                        className="shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-lg text-xs font-black tabular-nums"
+                        style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-muted)' }}
+                      >
+                        {positions.get(order.id)}
+                      </span>
+                      <span className="truncate">{order.address}</span>
                     </h3>
 
-                    {/* Payment badge */}
-                    <span
-                      className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg"
-                      style={
-                        order.payment_method === 'cash'
-                          ? { backgroundColor: 'var(--success-bg)', color: 'var(--success)', border: '1px solid var(--success-border)' }
-                          : { backgroundColor: 'var(--info-bg)', color: 'var(--info)', border: '1px solid var(--info-border)' }
-                      }
-                    >
-                      {order.payment_method === 'cash' ? '💵 Μετρητά' : '💳 Κάρτα'}
-                    </span>
+                    <div className="flex items-center flex-wrap gap-1.5">
+                      {/* Payment badge */}
+                      <span
+                        className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg"
+                        style={
+                          order.payment_method === 'cash'
+                            ? { backgroundColor: 'var(--success-bg)', color: 'var(--success)', border: '1px solid var(--success-border)' }
+                            : { backgroundColor: 'var(--info-bg)', color: 'var(--info)', border: '1px solid var(--info-border)' }
+                        }
+                      >
+                        {order.payment_method === 'cash' ? '💵 Μετρητά' : '💳 Κάρτα'}
+                      </span>
+
+                      {/* Απόσταση (+ επιπλέον χρέωση όταν υπάρχει) */}
+                      {order.distance_km !== null && (
+                        <span
+                          className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg"
+                          style={
+                            order.surcharge
+                              ? { backgroundColor: 'var(--warning-bg)', color: 'var(--warning)', border: '1px solid var(--warning-border)' }
+                              : { backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-muted)', border: '1px solid var(--border-subtle)' }
+                          }
+                        >
+                          <Route className="w-3 h-3" />
+                          {formatKm(order.distance_km)}
+                          {order.surcharge ? ` · +${formatEuro(order.surcharge)}` : ''}
+                        </span>
+                      )}
+                    </div>
                   </div>
 
-                  {/* Time badge */}
+                  {/* Time badge — αντίστροφη μέτρηση για τις προγραμματισμένες */}
                   <div
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-semibold shrink-0"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-semibold shrink-0 tabular-nums"
                     style={
-                      isLate
+                      isScheduled
+                        ? { backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-secondary)', border: '1px solid var(--border-default)' }
+                        : isLate
                         ? { backgroundColor: 'var(--danger-bg)', color: 'var(--danger)', border: '1px solid var(--danger-border)' }
                         : { backgroundColor: 'var(--success-bg)', color: 'var(--success)', border: '1px solid var(--success-border)' }
                     }
                   >
-                    <Clock className="w-3.5 h-3.5" />
-                    {minutesElapsed} λεπτά
+                    {isScheduled ? (
+                      <>
+                        <Timer className="w-3.5 h-3.5" />
+                        {formatCountdown(remainingMs)}
+                      </>
+                    ) : (
+                      <>
+                        <Clock className="w-3.5 h-3.5" />
+                        {minutesElapsed} λεπτά
+                      </>
+                    )}
                   </div>
                 </div>
 
@@ -202,8 +264,29 @@ export default function ActiveOrdersList({ storeId }: { storeId: string }) {
                 <div className="my-3" style={{ borderTop: '1px solid var(--border-subtle)' }} />
 
                 {/* Bottom row */}
-                <div className="flex items-center justify-between">
-                  {isPending ? (
+                <div className="flex items-center justify-between gap-2">
+                  {isScheduled ? (
+                    <>
+                      <span className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
+                        🕒 Θα σταλεί στους διανομείς σε {formatCountdown(remainingMs)}
+                      </span>
+                      <button
+                        onClick={() => handleCancel(order.id)}
+                        disabled={readOnly}
+                        title={readOnly ? 'Προσωρινά μη διαθέσιμο — εφεδρική λειτουργία' : undefined}
+                        className="flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-lg transition-all duration-150 shrink-0"
+                        style={{
+                          color: 'var(--danger)',
+                          backgroundColor: 'transparent',
+                          opacity: readOnly ? 0.4 : 1,
+                          cursor: readOnly ? 'not-allowed' : 'pointer',
+                        }}
+                      >
+                        <XCircle className="w-4 h-4" />
+                        Ακύρωση
+                      </button>
+                    </>
+                  ) : isPending ? (
                     <>
                       <span
                         className="text-sm font-medium animate-pulse"
@@ -235,16 +318,29 @@ export default function ActiveOrdersList({ storeId }: { storeId: string }) {
                     </>
                   ) : (
                     <>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
                         <div
-                          className="w-7 h-7 rounded-full flex items-center justify-center"
+                          className="w-7 h-7 rounded-full flex items-center justify-center shrink-0"
                           style={{ backgroundColor: 'var(--info-bg)' }}
                         >
                           <User className="w-3.5 h-3.5" style={{ color: 'var(--info)' }} />
                         </div>
-                        <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
-                          {order.drivers?.full_name || 'Άγνωστος Οδηγός'}
-                        </span>
+                        <div className="min-w-0">
+                          <span className="text-sm font-medium block truncate" style={{ color: 'var(--text-primary)' }}>
+                            {order.drivers?.full_name || 'Άγνωστος Οδηγός'}
+                          </span>
+                          {/* Τηλέφωνο του διανομέα που πήρε την παραγγελία */}
+                          {order.drivers?.phone && (
+                            <a
+                              href={`tel:${order.drivers.phone}`}
+                              className="text-xs font-semibold inline-flex items-center gap-1 hover:underline"
+                              style={{ color: 'var(--accent)' }}
+                            >
+                              <Phone className="w-3 h-3" />
+                              {order.drivers.phone}
+                            </a>
+                          )}
+                        </div>
                       </div>
                       <button
                         onClick={() => {
@@ -254,7 +350,7 @@ export default function ActiveOrdersList({ storeId }: { storeId: string }) {
                             toast.error('Δεν υπάρχει διαθέσιμη τοποθεσία για αυτόν τον οδηγό.');
                           }
                         }}
-                        className="flex items-center gap-1.5 text-sm font-semibold px-3 py-1.5 rounded-lg transition-all duration-150"
+                        className="flex items-center gap-1.5 text-sm font-semibold px-3 py-1.5 rounded-lg transition-all duration-150 shrink-0"
                         style={{ backgroundColor: 'var(--info-bg)', color: 'var(--info)', border: '1px solid var(--info-border)' }}
                         onMouseEnter={e => {
                           (e.currentTarget as HTMLButtonElement).style.opacity = '0.8';
@@ -263,7 +359,7 @@ export default function ActiveOrdersList({ storeId }: { storeId: string }) {
                           (e.currentTarget as HTMLButtonElement).style.opacity = '1';
                         }}
                       >
-                        <Map className="w-4 h-4" />
+                        <MapIcon className="w-4 h-4" />
                         {expandedOrderId === order.id ? 'Κλείσιμο Χάρτη' : 'Χάρτης'}
                       </button>
                     </>
@@ -272,9 +368,9 @@ export default function ActiveOrdersList({ storeId }: { storeId: string }) {
 
                 {expandedOrderId === order.id && order.drivers?.latitude && order.drivers?.longitude && (
                   <div className="mt-4 animate-fade-in">
-                    <DriverMapInline 
-                      lat={order.drivers.latitude} 
-                      lng={order.drivers.longitude} 
+                    <DriverMapInline
+                      lat={order.drivers.latitude}
+                      lng={order.drivers.longitude}
                       driverName={order.drivers.full_name}
                       isBusy={true}
                     />
