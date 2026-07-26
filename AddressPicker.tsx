@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import dynamic from 'next/dynamic';
 import { Star, MapPin, X, Trash2, Check, Route, Save, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
@@ -54,6 +55,12 @@ export default function AddressPicker({
   const [saveLabel, setSaveLabel] = useState('');
   const [companyCenter, setCompanyCenter] = useState<LatLng | null>(null);
   const [busy, setBusy] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMounted(true);
+  }, []);
 
   // Άνοιγμα: ξεκινάμε από την καρτέλα που έχει νόημα — αν δεν υπάρχουν
   // αποθηκευμένες, ο χάρτης είναι το μόνο χρήσιμο.
@@ -94,7 +101,7 @@ export default function AddressPicker({
   const pinSurcharge = pinDistance !== null ? surchargeFor(pinDistance) : 0;
   const pinTooFar = pinDistance !== null && pinDistance > MAX_DISTANCE_KM;
 
-  if (!isOpen) return null;
+  if (!isOpen || !mounted) return null;
 
   const applySaved = (a: SavedAddress) => {
     onApply({ address: a.address, lat: a.latitude, lon: a.longitude });
@@ -176,7 +183,16 @@ export default function AddressPicker({
       ? { background: 'linear-gradient(135deg, var(--accent), var(--accent-hover))', color: '#fff' }
       : { color: 'var(--text-secondary)', backgroundColor: 'transparent' };
 
-  return (
+  // PORTAL — ΜΗΝ ΤΟ ΑΦΑΙΡΕΣΕΙΣ: η στήλη της φόρμας (app/page.tsx) έχει
+  // `animate-fade-in-up`, δηλαδή animation με `transform` και `forwards`. Το
+  // transform μένει μόνιμα και κάνει τη στήλη containing block για κάθε `fixed`
+  // απόγονο — χωρίς portal το παράθυρο κλειδώνεται στο πλάτος της στήλης και το
+  // backdrop σκεπάζει μόνο αυτήν.
+  //
+  // Οι διαστάσεις γράφονται ως w/max-w και όχι ως `md:w-[min(95vw,1100px)]`:
+  // το `min()` μέσα σε arbitrary value ΔΕΝ παράγεται από το Tailwind και έπεφτε
+  // σιωπηλά πίσω στο `w-full`. Το ζεύγος w + max-w είναι ισοδύναμο.
+  return createPortal(
     <div className="fixed inset-0 z-[120] flex items-stretch md:items-center md:justify-center md:p-4">
       <div className="absolute inset-0 backdrop-blur-sm bg-black/50 animate-fade-in" onClick={onClose} />
 
@@ -184,7 +200,7 @@ export default function AddressPicker({
           πρέπει να κόβονται. Σε desktop γίνεται φαρδύ πάνελ δύο στηλών, στο ίδιο
           ύφος με το παράθυρο Στατιστικών. */}
       <div
-        className="relative w-full h-full md:w-[min(95vw,1000px)] md:h-[min(90vh,660px)] md:rounded-2xl animate-scale-in overflow-hidden flex flex-col backdrop-blur-xl backdrop-saturate-150"
+        className="relative w-full h-full md:w-[95vw] md:max-w-[1100px] md:h-[90vh] md:max-h-[700px] md:rounded-2xl animate-scale-in overflow-hidden flex flex-col backdrop-blur-xl backdrop-saturate-150"
         style={{
           backgroundColor: 'var(--nav-bg)',
           border: '1px solid var(--nav-border)',
@@ -371,6 +387,7 @@ export default function AddressPicker({
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
