@@ -40,7 +40,7 @@ interface Props {
   /** Ό,τι έχει ήδη γράψει ο χρήστης στη φόρμα — προσυμπληρώνει την περιγραφή. */
   currentAddress: string;
   maxSaved: number;
-  onApply: (a: { address: string; lat: number | null; lon: number | null }) => void;
+  onApply: (a: { address: string; lat: number | null; lon: number | null; alreadySaved: boolean }) => void;
   onDeleted: () => void;
   onSaved: () => void;
   storeId: string;
@@ -104,7 +104,8 @@ export default function AddressPicker({
   if (!isOpen || !mounted) return null;
 
   const applySaved = (a: SavedAddress) => {
-    onApply({ address: a.address, lat: a.latitude, lon: a.longitude });
+    // Ήδη υπάρχει στο saved_addresses — η φόρμα δεν πρέπει να προτείνει ξανά «Αποθήκευση».
+    onApply({ address: a.address, lat: a.latitude, lon: a.longitude, alreadySaved: true });
     onClose();
   };
 
@@ -163,7 +164,9 @@ export default function AddressPicker({
       onSaved();
     }
 
-    onApply({ address: addr, lat: pin.lat, lon: pin.lon });
+    // alreadySaved = true μόνο αν μόλις αποθηκεύτηκε εδώ (δόθηκε όνομα) — μια
+    // ανώνυμη επιλογή πινέζας ΔΕΝ είναι ακόμα στο saved_addresses.
+    onApply({ address: addr, lat: pin.lat, lon: pin.lon, alreadySaved: !!label });
     onClose();
   };
 

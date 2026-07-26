@@ -57,6 +57,10 @@ export default function OrderCreationForm({
 
   // ── Συντεταγμένες προορισμού (από την επιλεγμένη πρόταση ή αποθηκευμένη διεύθυνση) ──
   const [dest, setDest] = useState<{ lat: number; lon: number } | null>(null);
+  // Η τρέχουσα διεύθυνση είναι ήδη γραμμή του saved_addresses (επιλέχθηκε από
+  // την καρτέλα «Αποθηκευμένες» ή μόλις αποθηκεύτηκε με όνομα από τον χάρτη) —
+  // δεν έχει νόημα να προτείνουμε ξανά «Αποθήκευση» για κάτι που υπάρχει ήδη.
+  const [isAlreadySaved, setIsAlreadySaved] = useState(false);
   // Ο δρόμος (χωρίς αριθμό) για τον οποίο ισχύουν οι τρέχουσες συντεταγμένες. Η
   // ροή χρήσης είναι «διάλεξε δρόμο από το dropdown, ΜΕΤΑ πληκτρολόγησε αριθμό» —
   // αν το onChange ακύρωνε τις συντεταγμένες σε ΚΑΘΕ πλήκτρο, θα χανόταν η
@@ -151,6 +155,7 @@ export default function OrderCreationForm({
     if (norm(street) !== norm(destStreetRef.current || '')) {
       setDest(null);
       destStreetRef.current = null;
+      setIsAlreadySaved(false);
     }
     if (street.length < MIN_CHARS) {
       setSuggestions([]);
@@ -174,19 +179,21 @@ export default function OrderCreationForm({
     // Θυμόμαστε τον δρόμο ώστε το επόμενο onChange (π.χ. πληκτρολόγηση αριθμού)
     // να ξέρει ότι οι συντεταγμένες εξακολουθούν να ισχύουν.
     destStreetRef.current = hasCoords ? s.street : null;
+    setIsAlreadySaved(false); // πρόταση Geoapify — σίγουρα όχι ήδη αποθηκευμένη
     setSuggestions([]);
     setShowSuggestions(false);
     if (debounceRef.current) clearTimeout(debounceRef.current);
   };
 
   // Εφαρμογή διεύθυνσης από τον επιλογέα — είτε αποθηκευμένη, είτε πινέζα χάρτη.
-  const applyPicked = (a: { address: string; lat: number | null; lon: number | null }) => {
+  const applyPicked = (a: { address: string; lat: number | null; lon: number | null; alreadySaved: boolean }) => {
     setAddress(a.address);
     const hasCoords = a.lat != null && a.lon != null;
     setDest(hasCoords ? { lat: a.lat!, lon: a.lon! } : null);
     // Ίδιο κόλπο με το selectSuggestion: θυμόμαστε τον δρόμο ώστε μια μετέπειτα
     // προσθήκη αριθμού να μη σβήσει τις συντεταγμένες.
     destStreetRef.current = hasCoords ? splitAddress(a.address).street : null;
+    setIsAlreadySaved(a.alreadySaved);
     setSuggestions([]);
     setShowSuggestions(false);
   };
@@ -296,6 +303,7 @@ export default function OrderCreationForm({
       setPaymentMethod('cash');
       setDest(null);
       destStreetRef.current = null;
+      setIsAlreadySaved(false);
       setDelayMinutes(0);
       setCustomDelay('');
       setSuggestions([]);
@@ -321,7 +329,7 @@ export default function OrderCreationForm({
     fontSize: '14px',
   };
 
-  const canSaveCurrent = address.trim().length > 0 && dest !== null && saved.length < MAX_SAVED;
+  const canSaveCurrent = !isAlreadySaved && address.trim().length > 0 && dest !== null && saved.length < MAX_SAVED;
 
   return (
     <>
