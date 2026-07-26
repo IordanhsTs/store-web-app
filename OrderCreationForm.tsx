@@ -66,6 +66,11 @@ export default function OrderCreationForm({
   // αν το onChange ακύρωνε τις συντεταγμένες σε ΚΑΘΕ πλήκτρο, θα χανόταν η
   // απόσταση ακριβώς τη στιγμή που ο χρήστης προσθέτει τον αριθμό.
   const destStreetRef = useRef<string | null>(null);
+  // Το «ακατέργαστο» σημείο του Geoapify (κέντρο δρόμου) για τον τρέχοντα
+  // δρόμο — η βάση στην οποία επιστρέφουμε όταν ο αριθμός δεν ταιριάζει σε
+  // κανένα καταχωρημένο override (βλ. street_segments πιο κάτω).
+  const baseDestRef = useRef<{ lat: number; lon: number } | null>(null);
+  const overrideDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Καθυστερημένη αποστολή ──
   const [delayMinutes, setDelayMinutes] = useState(0);
@@ -86,6 +91,7 @@ export default function OrderCreationForm({
 
   useEffect(() => () => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (overrideDebounceRef.current) clearTimeout(overrideDebounceRef.current);
     abortRef.current?.abort();
   }, []);
 
@@ -143,19 +149,54 @@ export default function OrderCreationForm({
     return null;
   };
 
+  // ΧΕΙΡΟΚΙΝΗΤΟ OVERRIDE ανά τμήμα δρόμου (βλ. migration 0012_street_segment_overrides):
+  // το Geoapify γυρνάει ΕΝΑ σημείο για όλο τον δρόμο — σε μεγάλους δρόμους
+  // (π.χ. μελλοντική πόλη-επέκταση) ο αριθμός μπορεί να αλλάζει ουσιαστικά την
+  // απόσταση. Αν υπάρχει καταχωρημένο εύρος που ταιριάζει, το χρησιμοποιούμε —
+  // αλλιώς μένει το σημείο-κέντρο του δρόμου (baseDestRef). Αόρατο για τον
+  // χρήστη, καμία ερώτηση/κλικ.
+  const resolveOverride = async (street: string, numberStr: string) => {
+    const n = parseInt(numberStr, 10);
+    if (!Number.isFinite(n)) return null;
+    const { data, error } = await supabase.rpc('resolve_street_segment', {
+      p_street: street,
+      p_number: n,
+    });
+    if (error || !data || data.length === 0) return null;
+    const row = data[0];
+    if (typeof row.latitude !== 'number' || typeof row.longitude !== 'number') return null;
+    return { lat: row.latitude, lon: row.longitude };
+  };
+
   const onAddressChange = (value: string) => {
     setAddress(value);
     if (debounceRef.current) clearTimeout(debounceRef.current);
 
     // Ψάχνουμε μόνο το κομμάτι της οδού (χωρίς τον αριθμό).
-    const { street } = splitAddress(value);
+    const { street, number } = splitAddress(value);
 
     // Ακυρώνουμε τις συντεταγμένες ΜΟΝΟ αν άλλαξε ο ΔΡΟΜΟΣ — όχι σε κάθε πλήκτρο.
     // Έτσι το πληκτρολόγημα του αριθμού ΜΕΤΑ την επιλογή πρότασης δεν τις σβήνει.
     if (norm(street) !== norm(destStreetRef.current || '')) {
       setDest(null);
+      baseDestRef.current = null;
       destStreetRef.current = null;
       setIsAlreadySaved(false);
+    } else if (baseDestRef.current) {
+      // Ίδιος δρόμος, άλλαξε ο αριθμός: ελέγχουμε αν πέφτει σε καταχωρημένο
+      // override, αλλιώς ξαναγυρνάμε στο σημείο-κέντρο του δρόμου.
+      if (overrideDebounceRef.current) clearTimeout(overrideDebounceRef.current);
+      const streetForLookup = destStreetRef.current;
+      const base = baseDestRef.current;
+      if (!number) {
+        setDest(base);
+      } else {
+        overrideDebounceRef.current = setTimeout(() => {
+          resolveOverride(streetForLookup!, number).then((ov) => {
+            if (destStreetRef.current === streetForLookup) setDest(ov ?? base);
+          });
+        }, DEBOUNCE_MS);
+      }
     }
     if (street.length < MIN_CHARS) {
       setSuggestions([]);
@@ -175,7 +216,9 @@ export default function OrderCreationForm({
     const { number } = splitAddress(address);
     setAddress(number ? `${s.street} ${number}` : `${s.street} `);
     const hasCoords = s.lat != null && s.lon != null;
-    setDest(hasCoords ? { lat: s.lat!, lon: s.lon! } : null);
+    const basePoint = hasCoords ? { lat: s.lat!, lon: s.lon! } : null;
+    baseDestRef.current = basePoint;
+    setDest(basePoint);
     // Θυμόμαστε τον δρόμο ώστε το επόμενο onChange (π.χ. πληκτρολόγηση αριθμού)
     // να ξέρει ότι οι συντεταγμένες εξακολουθούν να ισχύουν.
     destStreetRef.current = hasCoords ? s.street : null;
@@ -183,13 +226,21 @@ export default function OrderCreationForm({
     setSuggestions([]);
     setShowSuggestions(false);
     if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    if (hasCoords && number) {
+      resolveOverride(s.street, number).then((ov) => {
+        if (ov && destStreetRef.current === s.street) setDest(ov);
+      });
+    }
   };
 
   // Εφαρμογή διεύθυνσης από τον επιλογέα — είτε αποθηκευμένη, είτε πινέζα χάρτη.
   const applyPicked = (a: { address: string; lat: number | null; lon: number | null; alreadySaved: boolean }) => {
     setAddress(a.address);
     const hasCoords = a.lat != null && a.lon != null;
-    setDest(hasCoords ? { lat: a.lat!, lon: a.lon! } : null);
+    const basePoint = hasCoords ? { lat: a.lat!, lon: a.lon! } : null;
+    baseDestRef.current = basePoint;
+    setDest(basePoint);
     // Ίδιο κόλπο με το selectSuggestion: θυμόμαστε τον δρόμο ώστε μια μετέπειτα
     // προσθήκη αριθμού να μη σβήσει τις συντεταγμένες.
     destStreetRef.current = hasCoords ? splitAddress(a.address).street : null;
