@@ -72,7 +72,7 @@ export default function AddressPickerMap({ center, origin, pin, onPick }: Props)
         center={[pin?.lat ?? center.lat, pin?.lon ?? center.lon]}
         zoom={15}
         scrollWheelZoom
-        className="h-[320px] w-full"
+        className="h-full w-full"
         style={{ background: isDark ? '#0d0d0d' : '#f8f5f0' }}
       >
         <TileLayer

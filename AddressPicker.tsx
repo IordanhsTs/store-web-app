@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import dynamic from 'next/dynamic';
-import { Star, MapPin, X, Trash2, Check, Route, Save, AlertTriangle, Info } from 'lucide-react';
+import { Star, MapPin, X, Trash2, Check, Route, Save, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase, getTenantSchema } from './lib/supabase';
 import { haversineKm, surchargeFor, formatKm, formatEuro, MAX_DISTANCE_KM } from './lib/distance';
@@ -11,7 +11,7 @@ import { haversineKm, surchargeFor, formatKm, formatEuro, MAX_DISTANCE_KM } from
 const AddressPickerMap = dynamic(() => import('./AddressPickerMap'), {
   ssr: false,
   loading: () => (
-    <div className="w-full h-[320px] animate-pulse" style={{ backgroundColor: 'var(--bg-tertiary)' }} />
+    <div className="w-full h-full animate-pulse" style={{ backgroundColor: 'var(--bg-tertiary)' }} />
   ),
 });
 
@@ -177,15 +177,22 @@ export default function AddressPicker({
       : { color: 'var(--text-secondary)', backgroundColor: 'transparent' };
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[120] flex items-stretch md:items-center md:justify-center md:p-4">
       <div className="absolute inset-0 backdrop-blur-sm bg-black/50 animate-fade-in" onClick={onClose} />
 
+      {/* Στο κινητό γεμίζει την οθόνη — ο χάρτης θέλει χώρο και τα πεδία δεν
+          πρέπει να κόβονται. Σε desktop γίνεται φαρδύ πάνελ δύο στηλών, στο ίδιο
+          ύφος με το παράθυρο Στατιστικών. */}
       <div
-        className="relative w-full max-w-lg rounded-2xl shadow-2xl animate-scale-in overflow-hidden flex flex-col"
-        style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-default)', maxHeight: '90vh' }}
+        className="relative w-full h-full md:w-[min(95vw,1000px)] md:h-[min(90vh,660px)] md:rounded-2xl animate-scale-in overflow-hidden flex flex-col backdrop-blur-xl backdrop-saturate-150"
+        style={{
+          backgroundColor: 'var(--nav-bg)',
+          border: '1px solid var(--nav-border)',
+          boxShadow: 'var(--shadow-xl)',
+        }}
       >
         {/* Κεφαλίδα */}
-        <div className="flex items-center justify-between gap-3 p-4 border-b" style={{ borderColor: 'var(--border-subtle)' }}>
+        <div className="flex items-center justify-between gap-3 p-4 border-b shrink-0" style={{ borderColor: 'var(--border-subtle)' }}>
           <h3 className="text-base font-bold m-0" style={{ color: 'var(--text-primary)' }}>
             Επιλογή διεύθυνσης
           </h3>
@@ -195,7 +202,7 @@ export default function AddressPicker({
         </div>
 
         {/* Καρτέλες */}
-        <div className="flex gap-1.5 p-1 m-3 rounded-xl" style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-subtle)' }}>
+        <div className="flex gap-1.5 p-1 m-3 rounded-xl shrink-0" style={{ backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-subtle)' }}>
           <button
             type="button"
             onClick={() => setTab('saved')}
@@ -216,17 +223,15 @@ export default function AddressPicker({
           </button>
         </div>
 
-        <div className="overflow-y-auto px-4 pb-4">
+        <div className="flex-1 min-h-0 flex flex-col">
           {/* ── ΚΑΡΤΕΛΑ: ΑΠΟΘΗΚΕΥΜΕΝΕΣ ── */}
           {tab === 'saved' && (
-            saved.length === 0 ? (
+            <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-4">
+            {saved.length === 0 ? (
               <div className="py-10 text-center">
                 <Star className="w-10 h-10 mx-auto mb-3" style={{ color: 'var(--text-muted)' }} />
                 <p className="text-sm font-semibold m-0" style={{ color: 'var(--text-primary)' }}>
                   Καμία αποθηκευμένη διεύθυνση
-                </p>
-                <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
-                  Επιλέξτε σημείο στον χάρτη και δώστε του όνομα για να το ξαναβρείτε γρήγορα.
                 </p>
               </div>
             ) : (
@@ -270,95 +275,98 @@ export default function AddressPicker({
                   </div>
                 ))}
               </div>
-            )
+            )}
+            </div>
           )}
 
           {/* ── ΚΑΡΤΕΛΑ: ΧΑΡΤΗΣ ── */}
+          {/* Κινητό: χάρτης πάνω, πεδία από κάτω, κουμπί καρφωμένο στον πάτο.
+              Desktop: χάρτης αριστερά σε όλο το ύψος, πεδία στήλη δεξιά. */}
           {tab === 'map' && (
-            <div className="space-y-3">
-              <p className="text-xs flex items-start gap-1.5 m-0" style={{ color: 'var(--text-muted)' }}>
-                <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                Πατήστε στον χάρτη ή σύρετε την πινέζα στο ακριβές σημείο. Χρήσιμο όταν η
-                διεύθυνση δεν βρίσκεται με αναζήτηση.
-              </p>
-
-              <div className="rounded-xl overflow-hidden border" style={{ borderColor: 'var(--border-subtle)' }}>
+            <div className="flex-1 min-h-0 flex flex-col md:flex-row gap-3 px-4 pb-4">
+              <div
+                className="h-[38vh] md:h-auto md:flex-1 shrink-0 md:shrink rounded-xl overflow-hidden border"
+                style={{ borderColor: 'var(--border-subtle)' }}
+              >
                 <AddressPickerMap center={center} origin={origin} pin={pin} onPick={setPin} />
               </div>
 
-              {/* Ζωντανή απόσταση/χρέωση της πινέζας */}
-              {pin && (
-                <div
-                  className="flex items-center flex-wrap gap-x-3 gap-y-1 px-3 py-2 rounded-xl text-xs font-semibold"
-                  style={
-                    pinTooFar
-                      ? { backgroundColor: 'var(--danger-bg)', border: '1px solid var(--danger-border)', color: 'var(--danger)' }
-                      : pinSurcharge > 0
-                      ? { backgroundColor: 'var(--warning-bg)', border: '1px solid var(--warning-border)', color: 'var(--warning)' }
-                      : { backgroundColor: 'var(--success-bg)', border: '1px solid var(--success-border)', color: 'var(--success)' }
-                  }
-                >
-                  <span className="inline-flex items-center gap-1.5">
-                    {pinTooFar ? <AlertTriangle className="w-3.5 h-3.5" /> : <Route className="w-3.5 h-3.5" />}
-                    {formatKm(pinDistance)}
-                  </span>
-                  <span>
-                    {pinTooFar
-                      ? `Πάνω από το όριο των ${MAX_DISTANCE_KM} χλμ`
-                      : pinSurcharge > 0
-                      ? `Επιπλέον χρέωση ${formatEuro(pinSurcharge)}`
-                      : 'Χωρίς επιπλέον χρέωση'}
-                  </span>
+              <div className="flex-1 min-h-0 md:flex-none md:w-[340px] flex flex-col">
+                <div className="flex-1 min-h-0 overflow-y-auto space-y-3 pr-0.5">
+                  {/* Ζωντανή απόσταση/χρέωση της πινέζας */}
+                  {pin && (
+                    <div
+                      className="flex items-center flex-wrap gap-x-3 gap-y-1 px-3 py-2 rounded-xl text-xs font-semibold"
+                      style={
+                        pinTooFar
+                          ? { backgroundColor: 'var(--danger-bg)', border: '1px solid var(--danger-border)', color: 'var(--danger)' }
+                          : pinSurcharge > 0
+                          ? { backgroundColor: 'var(--warning-bg)', border: '1px solid var(--warning-border)', color: 'var(--warning)' }
+                          : { backgroundColor: 'var(--success-bg)', border: '1px solid var(--success-border)', color: 'var(--success)' }
+                      }
+                    >
+                      <span className="inline-flex items-center gap-1.5">
+                        {pinTooFar ? <AlertTriangle className="w-3.5 h-3.5" /> : <Route className="w-3.5 h-3.5" />}
+                        {formatKm(pinDistance)}
+                      </span>
+                      <span>
+                        {pinTooFar
+                          ? `Πάνω από το όριο των ${MAX_DISTANCE_KM} χλμ`
+                          : pinSurcharge > 0
+                          ? `Επιπλέον χρέωση ${formatEuro(pinSurcharge)}`
+                          : 'Χωρίς επιπλέον χρέωση'}
+                      </span>
+                    </div>
+                  )}
+
+                  {!origin && (
+                    <p className="text-[11px] m-0" style={{ color: 'var(--warning)' }}>
+                      Το κατάστημα δεν έχει θέση στον χάρτη — δεν υπολογίζεται απόσταση.
+                    </p>
+                  )}
+
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                      Περιγραφή διεύθυνσης <span className="normal-case font-normal">(τη βλέπει ο διανομέας)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={mapAddress}
+                      onChange={(e) => setMapAddress(e.target.value)}
+                      placeholder="π.χ. Πίσω από το γήπεδο, κίτρινη πόρτα"
+                      style={inputStyle}
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                      Αποθήκευση με όνομα <span className="normal-case font-normal">(προαιρετικό)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={saveLabel}
+                      onChange={(e) => setSaveLabel(e.target.value)}
+                      placeholder="π.χ. LIDL"
+                      style={inputStyle}
+                    />
+                  </div>
                 </div>
-              )}
 
-              {!origin && (
-                <p className="text-[11px] m-0" style={{ color: 'var(--warning)' }}>
-                  Το κατάστημα δεν έχει θέση στον χάρτη, οπότε δεν υπολογίζεται απόσταση.
-                  Ζητήστε από τον διαχειριστή να την ορίσει.
-                </p>
-              )}
-
-              <div className="space-y-1.5">
-                <label className="block text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
-                  Περιγραφή διεύθυνσης <span className="normal-case font-normal">(τη βλέπει ο διανομέας)</span>
-                </label>
-                <input
-                  type="text"
-                  value={mapAddress}
-                  onChange={(e) => setMapAddress(e.target.value)}
-                  placeholder="π.χ. Πίσω από το γήπεδο, κίτρινη πόρτα"
-                  style={inputStyle}
-                />
+                <button
+                  type="button"
+                  onClick={confirmPin}
+                  disabled={busy || !pin || pinTooFar}
+                  className="shrink-0 mt-3 w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold text-white transition-all"
+                  style={{
+                    background: !pin || pinTooFar ? 'var(--text-muted)' : 'linear-gradient(135deg, var(--accent), var(--accent-hover))',
+                    opacity: busy ? 0.75 : 1,
+                    cursor: !pin || pinTooFar ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  {saveLabel.trim() ? <Save className="w-4 h-4" /> : <Check className="w-4 h-4" />}
+                  {saveLabel.trim() ? 'Αποθήκευση και χρήση' : 'Χρήση αυτού του σημείου'}
+                </button>
               </div>
-
-              <div className="space-y-1.5">
-                <label className="block text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
-                  Αποθήκευση με όνομα <span className="normal-case font-normal">(προαιρετικό)</span>
-                </label>
-                <input
-                  type="text"
-                  value={saveLabel}
-                  onChange={(e) => setSaveLabel(e.target.value)}
-                  placeholder="π.χ. LIDL"
-                  style={inputStyle}
-                />
-              </div>
-
-              <button
-                type="button"
-                onClick={confirmPin}
-                disabled={busy || !pin || pinTooFar}
-                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold text-white transition-all"
-                style={{
-                  background: !pin || pinTooFar ? 'var(--text-muted)' : 'linear-gradient(135deg, var(--accent), var(--accent-hover))',
-                  opacity: busy ? 0.75 : 1,
-                  cursor: !pin || pinTooFar ? 'not-allowed' : 'pointer',
-                }}
-              >
-                {saveLabel.trim() ? <Save className="w-4 h-4" /> : <Check className="w-4 h-4" />}
-                {saveLabel.trim() ? 'Αποθήκευση και χρήση' : 'Χρήση αυτού του σημείου'}
-              </button>
             </div>
           )}
         </div>

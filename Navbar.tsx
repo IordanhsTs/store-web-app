@@ -7,30 +7,11 @@ import HistoryStatsModal from './HistoryStatsModal';
 import ContactAdminModal from './ContactAdminModal';
 import { useRouter } from 'next/navigation';
 import { useSystemLoad } from './useSystemLoad';
-import { supabase, getActiveBackend } from './lib/supabase';
+import { supabase } from './lib/supabase';
 
-// ── Chip κατάστασης συστήματος (Primary/Standby) ─────────────────────────────
-// Ίδια λογική με το delivery-admin: δείχνει σε ποιο backend τρέχουμε.
-function BackendStatusChip() {
-  const onPrimary = getActiveBackend()?.name !== 'standby';
-  return (
-    <div
-      className="hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold mr-1"
-      title={onPrimary ? 'Το σύστημα τρέχει στο κύριο datacenter.' : 'Το σύστημα τρέχει στο εφεδρικό datacenter (failover).'}
-      style={{
-        backgroundColor: onPrimary ? 'var(--success-bg)' : 'var(--warning-bg)',
-        border: `1px solid ${onPrimary ? 'var(--success-border)' : 'var(--warning-border)'}`,
-        color: onPrimary ? 'var(--success)' : 'var(--warning)',
-      }}
-    >
-      <span
-        className="w-2 h-2 rounded-full inline-block"
-        style={{ backgroundColor: onPrimary ? 'var(--success)' : 'var(--warning)' }}
-      />
-      {onPrimary ? 'Primary' : 'Standby'}
-    </div>
-  );
-}
+// Το κατάστημα ΔΕΝ βλέπει σε ποιο backend τρέχουμε (απόφαση πελάτη): είναι
+// εσωτερική πληροφορία υποδομής και δεν του λέει τίποτα χρήσιμο. Ο ReadOnlyBanner
+// εξακολουθεί να τον ενημερώνει όταν πράγματι δεν μπορεί να στείλει παραγγελία.
 
 // ── System Load Badge ─────────────────────────────────────────────────────────
 // Ο πελάτης ζήτησε να φαίνεται ο ΦΟΡΤΟΣ αλλά ΟΧΙ ο αριθμός παραγγελιών — με την
@@ -73,17 +54,19 @@ function SystemLoadBadge() {
 
   return (
     <div
-      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all duration-500"
+      className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 rounded-xl text-xs font-bold transition-all duration-500"
       style={{
         backgroundColor: bg,
         border: `1px solid ${border}`,
         color,
         boxShadow: `0 0 10px ${border}`,
       }}
-      title="Φόρτος εργασίας του δικτύου διανομής"
+      title={`${label} — φόρτος εργασίας του δικτύου διανομής`}
     >
       <Icon className="w-3.5 h-3.5" />
-      <span>{label}</span>
+      {/* Σε στενή οθόνη μένει μόνο το σύμβολο: το λεκτικό έσπρωχνε έξω το όνομα
+          του καταστήματος, που είναι η πιο σημαντική πληροφορία της μπάρας. */}
+      <span className="hidden sm:inline">{label}</span>
     </div>
   );
 }
@@ -144,7 +127,7 @@ export default function Navbar({ storeId, storeName }: { storeId: string; storeN
           <div className="flex justify-between items-center h-16">
 
             {/* Brand & Store Name */}
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 sm:gap-4 min-w-0">
               <button
                 type="button"
                 onClick={() => router.refresh()}
@@ -175,13 +158,14 @@ export default function Navbar({ storeId, storeName }: { storeId: string; storeN
                 style={{ backgroundColor: 'var(--border-default)' }}
               />
 
-              {/* Store name */}
+              {/* Ποιο κατάστημα είναι συνδεδεμένο — ορατό ΠΑΝΤΑ, και στο κινητό:
+                  ο ίδιος υπολογιστής/τηλέφωνο μπορεί να αλλάξει λογαριασμό. */}
               <div
-                className="flex items-center gap-1.5 text-sm font-medium hidden sm:flex"
+                className="flex items-center gap-1.5 text-sm font-medium min-w-0"
                 style={{ color: 'var(--text-secondary)' }}
               >
-                <Store className="w-3.5 h-3.5" style={{ color: 'var(--accent)' }} />
-                {storeName}
+                <Store className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--accent)' }} />
+                <span className="truncate">{storeName}</span>
               </div>
             </div>
 
@@ -192,9 +176,6 @@ export default function Navbar({ storeId, storeName }: { storeId: string; storeN
 
             {/* Actions */}
             <div className="flex items-center gap-1">
-              {/* System status — μετά το mount, γιατί το ενεργό backend έρχεται από localStorage */}
-              {mounted && <BackendStatusChip />}
-
               {/* Μήνυμα στον διαχειριστή */}
               <button
                 onClick={() => setContactModalOpen(true)}
