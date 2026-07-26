@@ -40,7 +40,10 @@ export async function GET(req: NextRequest) {
   url.searchParams.set('apiKey', apiKey);
   url.searchParams.set('filter', bounds.filter);
   url.searchParams.set('bias', bounds.bias);
-  url.searchParams.set('type', 'street');
+  // ΧΩΡΙΣ 'type' filter: μικρά χωριά (π.χ. Αρμενοχώρι, Μεσονήσι) δεν έχουν
+  // καταχωρημένες οδούς στο Geoapify, μόνο το ίδιο το χωριό ως locality.
+  // Με type=street αυτά αποκλείονταν εντελώς. Το tight bounding box (filter)
+  // παραμένει η προστασία από αποτελέσματα εκτός περιοχής.
   url.searchParams.set('lang', 'el');
   url.searchParams.set('limit', '6');
 
