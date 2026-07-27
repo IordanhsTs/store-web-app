@@ -9,8 +9,9 @@ export default function SystemAlertListener({ storeId }: { storeId: string }) {
   const [alertMessage, setAlertMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    // Τοπικό αρχείο (όχι εξωτερικός πάροχος) — ίδιος ήχος με τις παραγγελίες.
-    const alertSound = new Audio('/notification.mp3');
+    // Τοπικό αρχείο (όχι εξωτερικός πάροχος) — ξεχωριστός ήχος μηνύματος, όχι ο
+    // ήχος παραγγελίας, ώστε το κατάστημα να ξεχωρίζει τι ήρθε.
+    const alertSound = new Audio('/message.wav');
 
     const channel = supabase
       .channel('system_alerts')
