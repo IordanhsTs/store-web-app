@@ -12,6 +12,8 @@ export type Order = {
   comments: string;
   status: 'scheduled' | 'pending' | 'accepted' | 'completed' | 'cancelled';
   created_at: string;
+  // Γεμίζει από release_due_orders() τη στιγμή scheduled→pending — βλ. ActiveOrdersList.
+  activated_at: string | null;
   accepted_at: string | null;
   picked_up_at: string | null;
   completed_at: string | null;

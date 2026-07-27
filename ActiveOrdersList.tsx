@@ -141,7 +141,9 @@ export default function ActiveOrdersList({ storeId }: { storeId: string }) {
 
       <div className="space-y-4 stagger">
         {orders.map((order: Order) => {
-          const minutesElapsed = Math.max(0, differenceInMinutes(now, new Date(order.created_at)));
+          // activated_at (γεμίζει τη στιγμή scheduled→pending) αντί για created_at: αλλιώς
+          // μια παραγγελία με 5' αναμονή θα έδειχνε ήδη 5' ενεργή τη στιγμή που ενεργοποιείται.
+          const minutesElapsed = Math.max(0, differenceInMinutes(now, new Date(order.activated_at || order.created_at)));
           const isPending = order.status === 'pending';
           const isScheduled = order.status === 'scheduled';
           const isLate = isPending && minutesElapsed > 9;
