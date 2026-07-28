@@ -65,15 +65,15 @@ export default function SystemAlertListener({ storeId }: { storeId: string }) {
       
       {/* Modal */}
       <div 
-        className="relative w-full max-w-md p-6 rounded-2xl shadow-2xl animate-scale-in"
+        className="relative w-full max-w-md p-6 rounded-2xl shadow-2xl animate-scale-in overflow-hidden"
         style={{
           backgroundColor: 'var(--bg-card)',
           border: '1px solid var(--border-default)',
         }}
       >
-        {/* Accent top line */}
-        <div 
-          className="absolute top-0 left-0 right-0 h-1 rounded-t-2xl"
+        {/* Accent top line — την κόβει στις γωνίες το overflow-hidden του modal */}
+        <div
+          className="absolute top-0 left-0 right-0 h-1"
           style={{ background: 'linear-gradient(90deg, var(--accent), var(--accent-hover))' }}
         />
 

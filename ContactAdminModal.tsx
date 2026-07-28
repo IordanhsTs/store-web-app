@@ -60,11 +60,14 @@ export default function ContactAdminModal({
 
       <form
         onSubmit={handleSend}
-        className="relative w-full max-w-md p-6 rounded-2xl shadow-2xl animate-scale-in"
+        className="relative w-full max-w-md p-6 rounded-2xl shadow-2xl animate-scale-in overflow-hidden"
         style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-default)' }}
       >
+        {/* Η μπάρα την κόβει το overflow-hidden του πλαισίου: δικό της border-radius
+            δεν δουλεύει, γιατί σε ύψος 4px ο browser σμικρύνει τα 16px σε 4px και
+            οι άκρες ξεπερνούν την καμπύλη της γωνίας. */}
         <div
-          className="absolute top-0 left-0 right-0 h-1 rounded-t-2xl"
+          className="absolute top-0 left-0 right-0 h-1"
           style={{ background: 'linear-gradient(90deg, var(--accent), var(--accent-hover))' }}
         />
 
