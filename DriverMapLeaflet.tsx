@@ -8,7 +8,7 @@ import { useTheme } from 'next-themes';
 // Δωρεάν tiles (Carto) — ίδιο σχήμα με τον admin (delivery-admin/src/LiveMap.jsx).
 const TILE_URLS = {
   dark: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
-  light: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
+  light: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
 };
 
 interface Props {
