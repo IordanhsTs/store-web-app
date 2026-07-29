@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import dynamic from 'next/dynamic';
 import { Star, MapPin, X, Trash2, Check, Route, Save, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase, getTenantSchema } from './lib/supabase';
-import { haversineKm, surchargeFor, formatKm, formatEuro, MAX_DISTANCE_KM } from './lib/distance';
+import { useRoadDistance } from './useRoadDistance';
+import { surchargeFor, formatKm, formatEuro, MAX_DISTANCE_KM } from './lib/distance';
 
 // Το Leaflet αγγίζει το `window` — μόνο στον browser.
 const AddressPickerMap = dynamic(() => import('./AddressPickerMap'), {
@@ -94,10 +95,11 @@ export default function AddressPicker({
 
   const center = origin ?? companyCenter ?? FALLBACK_CENTER;
 
-  const pinDistance = useMemo(
-    () => (origin && pin ? haversineKm(origin.lat, origin.lon, pin.lat, pin.lon) : null),
-    [origin, pin]
-  );
+  // Οδική απόσταση της πινέζας, με άμεσο fallback στην ευθεία (βλ. useRoadDistance).
+  // Το debounce του hook είναι σημαντικό εδώ: κάθε κλικ/σύρσιμο μετακινεί την
+  // πινέζα, και χωρίς αυτό κάθε μικρομετακίνηση θα ήταν ένα credit.
+  const pinInfo = useRoadDistance(origin, pin);
+  const pinDistance = pinInfo.km;
   const pinSurcharge = pinDistance !== null ? surchargeFor(pinDistance) : 0;
   const pinTooFar = pinDistance !== null && pinDistance > MAX_DISTANCE_KM;
 
@@ -127,6 +129,12 @@ export default function AddressPicker({
     }
     if (!addr) {
       toast.error('Γράψτε μια περιγραφή για να ξέρει ο διανομέας πού πάει.');
+      return;
+    }
+    if (pinInfo.loading) {
+      // Ίδιος λόγος με τη φόρμα παραγγελίας: να μην αποθηκευτεί η ευθεία τη
+      // στιγμή που έρχεται η οδική. Πλαφόν 5s στο hook, δεν κολλάει.
+      toast.info('Υπολογίζεται η διαδρομή — μια στιγμή.');
       return;
     }
     if (pinTooFar) {
@@ -327,6 +335,13 @@ export default function AddressPicker({
                       <span className="inline-flex items-center gap-1.5">
                         {pinTooFar ? <AlertTriangle className="w-3.5 h-3.5" /> : <Route className="w-3.5 h-3.5" />}
                         {formatKm(pinDistance)}
+                        <span className="font-normal opacity-70">
+                          {pinInfo.loading
+                            ? '· υπολογισμός…'
+                            : pinInfo.source === 'road'
+                            ? '· οδικά'
+                            : '· σε ευθεία'}
+                        </span>
                       </span>
                       <span>
                         {pinTooFar

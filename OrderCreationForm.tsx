@@ -6,9 +6,9 @@ import { toast } from 'sonner';
 import { supabase, isReadOnly } from './lib/supabase';
 import { confirmDialog } from './ConfirmDialog';
 import { useStoreOrigin } from './useStoreOrigin';
+import { useRoadDistance } from './useRoadDistance';
 import AddressPicker, { type SavedAddress } from './AddressPicker';
 import {
-  haversineKm,
   surchargeFor,
   formatKm,
   formatEuro,
@@ -250,7 +250,11 @@ export default function OrderCreationForm({
   };
 
   // ── Απόσταση / χρέωση της τρέχουσας διεύθυνσης ──
-  const distanceKm = origin && dest ? haversineKm(origin.lat, origin.lon, dest.lat, dest.lon) : null;
+  // ΟΔΙΚΗ απόσταση μέσω δρόμων (Geoapify Routing) με άμεσο fallback στην ευθεία:
+  // το badge δείχνει αμέσως έναν αριθμό και τον αναβαθμίζει μόλις γυρίσει η
+  // διαδρομή. Ό,τι δείχνει το badge είναι ΚΑΙ ό,τι αποθηκεύεται στην παραγγελία.
+  const distance = useRoadDistance(origin, dest);
+  const distanceKm = distance.km;
   const surcharge = distanceKm !== null ? surchargeFor(distanceKm) : 0;
   const tooFar = distanceKm !== null && distanceKm > MAX_DISTANCE_KM;
 
@@ -298,6 +302,14 @@ export default function OrderCreationForm({
     const fullAddress = address.trim();
     if (!fullAddress) {
       toast.error('Παρακαλώ εισάγετε διεύθυνση παράδοσης.');
+      return;
+    }
+
+    // Η οδική απόσταση είναι ακόμα στον αέρα. Μισό δευτερόλεπτο αναμονής είναι
+    // προτιμότερο από παραγγελία χρεωμένη με την (μικρότερη) ευθεία. Δεν κολλάει
+    // ποτέ: το useRoadDistance έχει πλαφόν 5s και μετά πέφτει στην ευθεία.
+    if (distance.loading) {
+      toast.info('Υπολογίζεται η διαδρομή — μια στιγμή.');
       return;
     }
 
@@ -524,6 +536,15 @@ export default function OrderCreationForm({
             <span className="inline-flex items-center gap-1.5">
               {tooFar ? <AlertTriangle className="w-3.5 h-3.5" /> : <Route className="w-3.5 h-3.5" />}
               {formatKm(distanceKm)}
+              {/* Ποια απόσταση βλέπει το μαγαζί: οδική ή (προσωρινά/εφεδρικά) ευθεία.
+                  Χρεώνεται αυτό που γράφει εδώ, οπότε δεν το κρύβουμε. */}
+              <span className="font-normal opacity-70">
+                {distance.loading
+                  ? '· υπολογισμός διαδρομής…'
+                  : distance.source === 'road'
+                  ? `· οδικά${distance.minutes !== null ? ` · ~${distance.minutes}′` : ''}`
+                  : '· σε ευθεία'}
+              </span>
             </span>
             {tooFar ? (
               <span>Πάνω από το όριο των {MAX_DISTANCE_KM} χλμ — δεν επιτρέπεται</span>
