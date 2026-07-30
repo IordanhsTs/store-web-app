@@ -16,7 +16,16 @@ import {
   FREE_RADIUS_KM,
 } from './lib/distance';
 
-type Suggestion = { street: string; context: string; lat: number | null; lon: number | null };
+type Suggestion = {
+  street: string;
+  context: string;
+  lat: number | null;
+  lon: number | null;
+  /** Κατάστημα/σημείο ενδιαφέροντος αντί για οδό (π.χ. «Coffee Train»). */
+  isPlace?: boolean;
+  /** Η οδός στην οποία βρίσκεται το κατάστημα — μπαίνει στη διεύθυνση. */
+  streetName?: string;
+};
 
 const MIN_CHARS = 3;      // δεν ψάχνουμε πριν από τόσα γράμματα (όσα δέχεται και το API route)
 const DEBOUNCE_MS = 200;  // περιμένουμε να σταματήσει το πληκτρολόγιο
@@ -72,6 +81,9 @@ export default function OrderCreationForm({
   // κανένα καταχωρημένο override (βλ. street_segments πιο κάτω).
   const baseDestRef = useRef<{ lat: number; lon: number } | null>(null);
   const overrideDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Το τρέχον σημείο προήλθε από ΚΑΤΑΣΤΗΜΑ (POI), όχι από οδό. Τότε είναι ήδη
+  // ακριβές και δεν δέχεται αριθμό — «Coffee Train 5» δεν σημαίνει τίποτα.
+  const destIsPlaceRef = useRef(false);
 
   // ── Καθυστερημένη αποστολή ──
   const [delayMinutes, setDelayMinutes] = useState(0);
@@ -203,6 +215,11 @@ export default function OrderCreationForm({
       setDestExact(false);
       baseDestRef.current = null;
       destStreetRef.current = null;
+      destIsPlaceRef.current = false;
+    } else if (destIsPlaceRef.current) {
+      // Κατάστημα: το σημείο του POI είναι ήδη ακριβές και δεν αλλάζει με αριθμό.
+      setDest(baseDestRef.current);
+      setDestExact(true);
     } else if (baseDestRef.current) {
       // Ίδιος δρόμος, άλλαξε ο αριθμός: ελέγχουμε αν πέφτει σε καταχωρημένο
       // override, αλλιώς ξαναγυρνάμε στο σημείο-κέντρο του δρόμου.
@@ -236,21 +253,40 @@ export default function OrderCreationForm({
   };
 
   const selectSuggestion = (s: Suggestion) => {
-    // Κρατάμε τον αριθμό που είχε ήδη γράψει ο χρήστης — ένα πεδίο, μία κίνηση.
-    const { number } = splitAddress(address);
-    setAddress(number ? `${s.street} ${number}` : `${s.street} `);
     const hasCoords = s.lat != null && s.lon != null;
     const basePoint = hasCoords ? { lat: s.lat!, lon: s.lon! } : null;
     baseDestRef.current = basePoint;
     setDest(basePoint);
+    setSuggestions([]);
+    setShowSuggestions(false);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    // ── ΚΑΤΑΣΤΗΜΑ (π.χ. «Coffee Train») ──
+    // Το POI έχει ΔΙΚΕΣ ΤΟΥ ακριβείς συντεταγμένες — δεν είναι σημείο δρόμου,
+    // άρα ούτε «κατά προσέγγιση» είναι, ούτε δέχεται αριθμό (το «Coffee Train 5»
+    // δεν σημαίνει τίποτα). Στη διεύθυνση γράφουμε όνομα + οδό, γιατί ο
+    // διανομέας χρειάζεται και τα δύο για να το βρει.
+    if (s.isPlace) {
+      const label = s.streetName ? `${s.street}, ${s.streetName}` : s.street;
+      setAddress(label);
+      setDestExact(hasCoords);
+      // Κρατάμε ΟΛΟ το κείμενο ως «δρόμο»: έτσι το onAddressChange το αναγνωρίζει
+      // και δεν σβήνει τις συντεταγμένες αν ο χρήστης προσθέσει κάτι (π.χ. όροφο).
+      destStreetRef.current = hasCoords ? label : null;
+      destIsPlaceRef.current = hasCoords;
+      return;
+    }
+
+    // ── ΟΔΟΣ ──
+    destIsPlaceRef.current = false;
+    // Κρατάμε τον αριθμό που είχε ήδη γράψει ο χρήστης — ένα πεδίο, μία κίνηση.
+    const { number } = splitAddress(address);
+    setAddress(number ? `${s.street} ${number}` : `${s.street} `);
     // Η πρόταση είναι σημείο ΔΡΟΜΟΥ· γίνεται ακριβής μόνο αν λυθεί ο αριθμός.
     setDestExact(false);
     // Θυμόμαστε τον δρόμο ώστε το επόμενο onChange (π.χ. πληκτρολόγηση αριθμού)
     // να ξέρει ότι οι συντεταγμένες εξακολουθούν να ισχύουν.
     destStreetRef.current = hasCoords ? s.street : null;
-    setSuggestions([]);
-    setShowSuggestions(false);
-    if (debounceRef.current) clearTimeout(debounceRef.current);
 
     if (hasCoords && number) {
       resolveNumberPoint(s.street, number).then((ov) => {
@@ -272,6 +308,7 @@ export default function OrderCreationForm({
     // Αποθηκευμένη διεύθυνση ή πινέζα χάρτη: το σημείο το όρισε ΑΝΘΡΩΠΟΣ, άρα
     // είναι ό,τι ακριβέστερο έχουμε — δεν το σημαδεύουμε ποτέ ως προσεγγιστικό.
     setDestExact(hasCoords);
+    destIsPlaceRef.current = false;
     // Ίδιο κόλπο με το selectSuggestion: θυμόμαστε τον δρόμο ώστε μια μετέπειτα
     // προσθήκη αριθμού να μη σβήσει τις συντεταγμένες.
     destStreetRef.current = hasCoords ? splitAddress(a.address).street : null;
@@ -371,6 +408,7 @@ export default function OrderCreationForm({
       setDest(null);
       setDestExact(false);
       destStreetRef.current = null;
+      destIsPlaceRef.current = false;
       setDelayMinutes(0);
       setCustomDelay('');
       setSuggestions([]);
