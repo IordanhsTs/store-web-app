@@ -107,11 +107,24 @@ export function useRoadDistance(origin: Point, dest: Point): Distance {
   const current = outcome && outcome.key === pairKey ? outcome : null;
   const road = current?.status === 'ok' ? current : null;
 
+  // Όσο δεν έχει έρθει αποτέλεσμα για ΑΥΤΗ τη διαδρομή, υπολογίζουμε.
+  const loading = pairKey !== null && !skip && current === null;
+
+  // ΔΕΝ δείχνουμε την ευθεία όσο τρέχει το routing (απόφαση χρήστη 30/07/2026).
+  // Πριν, το badge έγραφε πρώτα την ευθεία (π.χ. 0,9 χλμ) και ~350ms αργότερα
+  // πηδούσε στην οδική (1,1 χλμ). Ήταν σωστό τεχνικά αλλά «ύποπτο» για τον
+  // μαγαζάτορα: ένας αριθμός χρέωσης που αλλάζει μόνος του υπονομεύει την
+  // εμπιστοσύνη στο σύστημα. Καλύτερα μία τιμή, μία φορά, η σωστή.
+  //
+  // Η ευθεία ΔΕΝ φεύγει — κρατά τους δύο ρόλους ασφαλείας της:
+  //   • skip: αν ξεπερνά ήδη το όριο, δεν ξοδεύουμε credit routing (η οδική
+  //     είναι πάντα ≥ αυτής) και δείχνουμε αμέσως την τιμή που μπλοκάρει
+  //   • fallback: αν αποτύχει το routing, εμφανίζεται με ένδειξη «σε ευθεία»
+  //     ώστε καμία παραγγελία να μη μένει χωρίς απόσταση
   return {
-    km: road ? road.km : straight,
-    source: straight === null ? null : road ? 'road' : 'straight',
+    km: loading ? null : road ? road.km : straight,
+    source: loading || straight === null ? null : road ? 'road' : 'straight',
     minutes: road ? road.minutes : null,
-    // Όσο δεν έχει έρθει αποτέλεσμα για ΑΥΤΗ τη διαδρομή, υπολογίζουμε.
-    loading: pairKey !== null && !skip && current === null,
+    loading,
   };
 }

@@ -325,7 +325,9 @@ export default function AddressPicker({
                     <div
                       className="flex items-center flex-wrap gap-x-3 gap-y-1 px-3 py-2 rounded-xl text-xs font-semibold"
                       style={
-                        pinTooFar
+                        pinInfo.loading
+                          ? { backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border-default)', color: 'var(--text-secondary)' }
+                          : pinTooFar
                           ? { backgroundColor: 'var(--danger-bg)', border: '1px solid var(--danger-border)', color: 'var(--danger)' }
                           : pinSurcharge > 0
                           ? { backgroundColor: 'var(--warning-bg)', border: '1px solid var(--warning-border)', color: 'var(--warning)' }
@@ -333,23 +335,29 @@ export default function AddressPicker({
                       }
                     >
                       <span className="inline-flex items-center gap-1.5">
-                        {pinTooFar ? <AlertTriangle className="w-3.5 h-3.5" /> : <Route className="w-3.5 h-3.5" />}
-                        {formatKm(pinDistance)}
-                        <span className="font-normal opacity-70">
-                          {pinInfo.loading
-                            ? '· υπολογισμός…'
-                            : pinInfo.source === 'road'
-                            ? '· οδικά'
-                            : '· σε ευθεία'}
+                        {pinTooFar && !pinInfo.loading ? (
+                          <AlertTriangle className="w-3.5 h-3.5" />
+                        ) : (
+                          <Route className={`w-3.5 h-3.5${pinInfo.loading ? ' opacity-60' : ''}`} />
+                        )}
+                        {/* Ίδιος κανόνας με τη φόρμα παραγγελίας: ποτέ η ευθεία ως
+                            προσωρινή τιμή — μία μέτρηση, μία φορά, η οδική. */}
+                        {pinInfo.loading ? 'Υπολογισμός διαδρομής…' : formatKm(pinDistance)}
+                        {!pinInfo.loading && (
+                          <span className="font-normal opacity-70">
+                            {pinInfo.source === 'road' ? '· οδικά' : '· σε ευθεία'}
+                          </span>
+                        )}
+                      </span>
+                      {!pinInfo.loading && (
+                        <span>
+                          {pinTooFar
+                            ? `Πάνω από το όριο των ${MAX_DISTANCE_KM} χλμ`
+                            : pinSurcharge > 0
+                            ? `Επιπλέον χρέωση ${formatEuro(pinSurcharge)}`
+                            : 'Χωρίς επιπλέον χρέωση'}
                         </span>
-                      </span>
-                      <span>
-                        {pinTooFar
-                          ? `Πάνω από το όριο των ${MAX_DISTANCE_KM} χλμ`
-                          : pinSurcharge > 0
-                          ? `Επιπλέον χρέωση ${formatEuro(pinSurcharge)}`
-                          : 'Χωρίς επιπλέον χρέωση'}
-                      </span>
+                      )}
                     </div>
                   )}
 

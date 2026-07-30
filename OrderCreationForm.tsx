@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { Banknote, CreditCard, MapPin, Send, Lock, Save, Clock, Route, AlertTriangle, BookMarked } from 'lucide-react';
+import { Banknote, CreditCard, MapPin, Send, Lock, Clock, Route, AlertTriangle, BookMarked } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase, isReadOnly } from './lib/supabase';
 import { confirmDialog } from './ConfirmDialog';
@@ -57,10 +57,11 @@ export default function OrderCreationForm({
 
   // ── Συντεταγμένες προορισμού (από την επιλεγμένη πρόταση ή αποθηκευμένη διεύθυνση) ──
   const [dest, setDest] = useState<{ lat: number; lon: number } | null>(null);
-  // Η τρέχουσα διεύθυνση είναι ήδη γραμμή του saved_addresses (επιλέχθηκε από
-  // την καρτέλα «Αποθηκευμένες» ή μόλις αποθηκεύτηκε με όνομα από τον χάρτη) —
-  // δεν έχει νόημα να προτείνουμε ξανά «Αποθήκευση» για κάτι που υπάρχει ήδη.
-  const [isAlreadySaved, setIsAlreadySaved] = useState(false);
+  // Ξέρουμε το σημείο ΤΟΥ ΑΡΙΘΜΟΥ ή μόνο του δρόμου; Το Geoapify δεν το λέει
+  // ποτέ μόνο του (βλ. app/api/resolve-number) — όταν αγνοεί τον αριθμό γυρνάει
+  // σιωπηλά το σημείο του δρόμου, που σε δρόμο 2 χλμ σημαίνει έως 2 χλμ λάθος
+  // και έως 3,90 € λάθος χρέωση. Το κρατάμε ξεχωριστά ώστε να ΦΑΙΝΕΤΑΙ.
+  const [destExact, setDestExact] = useState(false);
   // Ο δρόμος (χωρίς αριθμό) για τον οποίο ισχύουν οι τρέχουσες συντεταγμένες. Η
   // ροή χρήσης είναι «διάλεξε δρόμο από το dropdown, ΜΕΤΑ πληκτρολόγησε αριθμό» —
   // αν το onChange ακύρωνε τις συντεταγμένες σε ΚΑΘΕ πλήκτρο, θα χανόταν η
@@ -78,7 +79,6 @@ export default function OrderCreationForm({
 
   // ── Αποθηκευμένες διευθύνσεις ──
   const [saved, setSaved] = useState<SavedAddress[]>([]);
-  const [savingLabel, setSavingLabel] = useState<string | null>(null); // null = κλειστό
   const [pickerOpen, setPickerOpen] = useState(false);
 
   // ── Autocomplete state ──
@@ -155,17 +155,38 @@ export default function OrderCreationForm({
   // απόσταση. Αν υπάρχει καταχωρημένο εύρος που ταιριάζει, το χρησιμοποιούμε —
   // αλλιώς μένει το σημείο-κέντρο του δρόμου (baseDestRef). Αόρατο για τον
   // χρήστη, καμία ερώτηση/κλικ.
-  const resolveOverride = async (street: string, numberStr: string) => {
+  // Επιστρέφει σημείο ΜΟΝΟ αν ξέρουμε πραγματικά πού πέφτει ο αριθμός. Σειρά:
+  //   1. χειροκίνητο override — άνθρωπος το καταχώρησε, υπερισχύει πάντα
+  //   2. Geoapify ΜΕ τον αριθμό, αν αποδεδειγμένα τον ξέρει (resolve-number)
+  //   3. null → ο caller κρατά το σημείο-κέντρο του δρόμου, σημαδεμένο ως ανακριβές
+  const resolveNumberPoint = async (street: string, numberStr: string) => {
     const n = parseInt(numberStr, 10);
     if (!Number.isFinite(n)) return null;
+
     const { data, error } = await supabase.rpc('resolve_street_segment', {
       p_street: street,
       p_number: n,
     });
-    if (error || !data || data.length === 0) return null;
-    const row = data[0];
-    if (typeof row.latitude !== 'number' || typeof row.longitude !== 'number') return null;
-    return { lat: row.latitude, lon: row.longitude };
+    if (!error && data && data.length > 0) {
+      const row = data[0];
+      if (typeof row.latitude === 'number' && typeof row.longitude === 'number') {
+        return { lat: row.latitude, lon: row.longitude };
+      }
+    }
+
+    // Fail-open: κάθε αποτυχία εδώ σημαίνει απλώς «δεν ξέρουμε τον αριθμό»,
+    // ποτέ μπλοκαρισμένη παραγγελία.
+    try {
+      const res = await fetch(
+        `/api/resolve-number?street=${encodeURIComponent(street)}&number=${encodeURIComponent(numberStr)}`
+      );
+      const p = await res.json();
+      if (p?.precise && typeof p.lat === 'number' && typeof p.lon === 'number') {
+        return { lat: p.lat, lon: p.lon };
+      }
+    } catch {}
+
+    return null;
   };
 
   const onAddressChange = (value: string) => {
@@ -179,9 +200,9 @@ export default function OrderCreationForm({
     // Έτσι το πληκτρολόγημα του αριθμού ΜΕΤΑ την επιλογή πρότασης δεν τις σβήνει.
     if (norm(street) !== norm(destStreetRef.current || '')) {
       setDest(null);
+      setDestExact(false);
       baseDestRef.current = null;
       destStreetRef.current = null;
-      setIsAlreadySaved(false);
     } else if (baseDestRef.current) {
       // Ίδιος δρόμος, άλλαξε ο αριθμός: ελέγχουμε αν πέφτει σε καταχωρημένο
       // override, αλλιώς ξαναγυρνάμε στο σημείο-κέντρο του δρόμου.
@@ -190,10 +211,13 @@ export default function OrderCreationForm({
       const base = baseDestRef.current;
       if (!number) {
         setDest(base);
+        setDestExact(false);
       } else {
         overrideDebounceRef.current = setTimeout(() => {
-          resolveOverride(streetForLookup!, number).then((ov) => {
-            if (destStreetRef.current === streetForLookup) setDest(ov ?? base);
+          resolveNumberPoint(streetForLookup!, number).then((ov) => {
+            if (destStreetRef.current !== streetForLookup) return;
+            setDest(ov ?? base);
+            setDestExact(ov !== null);
           });
         }, DEBOUNCE_MS);
       }
@@ -219,17 +243,21 @@ export default function OrderCreationForm({
     const basePoint = hasCoords ? { lat: s.lat!, lon: s.lon! } : null;
     baseDestRef.current = basePoint;
     setDest(basePoint);
+    // Η πρόταση είναι σημείο ΔΡΟΜΟΥ· γίνεται ακριβής μόνο αν λυθεί ο αριθμός.
+    setDestExact(false);
     // Θυμόμαστε τον δρόμο ώστε το επόμενο onChange (π.χ. πληκτρολόγηση αριθμού)
     // να ξέρει ότι οι συντεταγμένες εξακολουθούν να ισχύουν.
     destStreetRef.current = hasCoords ? s.street : null;
-    setIsAlreadySaved(false); // πρόταση Geoapify — σίγουρα όχι ήδη αποθηκευμένη
     setSuggestions([]);
     setShowSuggestions(false);
     if (debounceRef.current) clearTimeout(debounceRef.current);
 
     if (hasCoords && number) {
-      resolveOverride(s.street, number).then((ov) => {
-        if (ov && destStreetRef.current === s.street) setDest(ov);
+      resolveNumberPoint(s.street, number).then((ov) => {
+        if (ov && destStreetRef.current === s.street) {
+          setDest(ov);
+          setDestExact(true);
+        }
       });
     }
   };
@@ -241,10 +269,12 @@ export default function OrderCreationForm({
     const basePoint = hasCoords ? { lat: a.lat!, lon: a.lon! } : null;
     baseDestRef.current = basePoint;
     setDest(basePoint);
+    // Αποθηκευμένη διεύθυνση ή πινέζα χάρτη: το σημείο το όρισε ΑΝΘΡΩΠΟΣ, άρα
+    // είναι ό,τι ακριβέστερο έχουμε — δεν το σημαδεύουμε ποτέ ως προσεγγιστικό.
+    setDestExact(hasCoords);
     // Ίδιο κόλπο με το selectSuggestion: θυμόμαστε τον δρόμο ώστε μια μετέπειτα
     // προσθήκη αριθμού να μη σβήσει τις συντεταγμένες.
     destStreetRef.current = hasCoords ? splitAddress(a.address).street : null;
-    setIsAlreadySaved(a.alreadySaved);
     setSuggestions([]);
     setShowSuggestions(false);
   };
@@ -259,39 +289,6 @@ export default function OrderCreationForm({
   const tooFar = distanceKm !== null && distanceKm > MAX_DISTANCE_KM;
 
   const effectiveDelay = delayMinutes === -1 ? parseInt(customDelay, 10) || 0 : delayMinutes;
-
-  const handleSaveAddress = async () => {
-    const label = (savingLabel || '').trim();
-    if (!label) {
-      toast.error('Δώστε ένα όνομα για την διεύθυνση (π.χ. LIDL).');
-      return;
-    }
-    if (saved.length >= MAX_SAVED) {
-      toast.error(`Έχετε φτάσει το όριο των ${MAX_SAVED} αποθηκευμένων διευθύνσεων.`);
-      return;
-    }
-    const { error } = await supabase.from('saved_addresses').insert({
-      store_id: storeId,
-      label,
-      address: address.trim(),
-      latitude: dest?.lat ?? null,
-      longitude: dest?.lon ?? null,
-      distance_km: distanceKm,
-      surcharge: distanceKm !== null ? surcharge : null,
-    });
-    if (error) {
-      // unique (store_id, label)
-      toast.error(
-        error.code === '23505'
-          ? 'Υπάρχει ήδη αποθηκευμένη διεύθυνση με αυτό το όνομα.'
-          : 'Αποτυχία αποθήκευσης της διεύθυνσης.'
-      );
-      return;
-    }
-    toast.success(`Η διεύθυνση αποθηκεύτηκε ως «${label}».`);
-    setSavingLabel(null);
-    loadSaved();
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -359,19 +356,25 @@ export default function OrderCreationForm({
 
     if (error) {
       console.error(error);
-      toast.error('Αποτυχία δημιουργίας παραγγελίας. Δοκιμάστε ξανά.');
+      // Ο ΚΩΔΙΚΟΣ ΣΤΗΝ ΟΘΟΝΗ, όχι μόνο στην κονσόλα. Στις 30/07/2026 έπεσε η
+      // αποστολή παραγγελιών και χάθηκε μια ώρα σε εικασίες, επειδή το μόνο
+      // στοιχείο ήταν ένα γενικό «δοκιμάστε ξανά»: μέσα στο μαγαζί κανείς δεν
+      // ανοίγει F12 τη στιγμή που τρέχει η βάρδια. Με τον κωδικό ορατό, ο
+      // μαγαζάτορας τον διαβάζει στο τηλέφωνο και η διάγνωση είναι άμεση
+      // (42501/PGRST301 = RLS, 23502/23514 = constraint, 5xx = δίκτυο).
+      const code = error.code || 'άγνωστος';
+      toast.error(`Αποτυχία δημιουργίας παραγγελίας. Δοκιμάστε ξανά. (κωδικός: ${code})`);
     } else {
       setAddress('');
       setComments('');
       setPaymentMethod('cash');
       setDest(null);
+      setDestExact(false);
       destStreetRef.current = null;
-      setIsAlreadySaved(false);
       setDelayMinutes(0);
       setCustomDelay('');
       setSuggestions([]);
       setShowSuggestions(false);
-      setSavingLabel(null);
       toast.success(
         scheduledAt
           ? `Η παραγγελία προγραμματίστηκε — θα σταλεί στους διανομείς σε ${effectiveDelay} λεπτά.`
@@ -391,8 +394,6 @@ export default function OrderCreationForm({
     padding: '10px 14px',
     fontSize: '14px',
   };
-
-  const canSaveCurrent = !isAlreadySaved && address.trim().length > 0 && dest !== null && saved.length < MAX_SAVED;
 
   return (
     <>
@@ -522,11 +523,17 @@ export default function OrderCreationForm({
         </div>
 
         {/* ── Απόσταση / χρέωση / όριο ── */}
-        {distanceKm !== null && (
+        {/* Το badge μένει ΜΟΝΤΑΡΙΣΜΕΝΟ και όσο υπολογίζεται: αν εμφανιζόταν μόνο
+            με έτοιμο αριθμό, θα «πεταγόταν» στη σελίδα και θα μετακινούσε τα
+            πεδία από κάτω — δηλαδή ίδια εντύπωση αστάθειας με τον αριθμό που
+            άλλαζε. Ουδέτερο χρώμα όσο δεν ξέρουμε αν υπάρχει χρέωση. */}
+        {(distanceKm !== null || distance.loading) && (
           <div
             className="mt-2 mb-1 flex items-center flex-wrap gap-x-3 gap-y-1 px-3 py-2 rounded-xl text-xs font-semibold"
             style={
-              tooFar
+              distance.loading
+                ? { backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border-default)', color: 'var(--text-secondary)' }
+                : tooFar
                 ? { backgroundColor: 'var(--danger-bg)', border: '1px solid var(--danger-border)', color: 'var(--danger)' }
                 : surcharge > 0
                 ? { backgroundColor: 'var(--warning-bg)', border: '1px solid var(--warning-border)', color: 'var(--warning)' }
@@ -534,74 +541,49 @@ export default function OrderCreationForm({
             }
           >
             <span className="inline-flex items-center gap-1.5">
-              {tooFar ? <AlertTriangle className="w-3.5 h-3.5" /> : <Route className="w-3.5 h-3.5" />}
-              {formatKm(distanceKm)}
-              {/* Ποια απόσταση βλέπει το μαγαζί: οδική ή (προσωρινά/εφεδρικά) ευθεία.
+              {distance.loading ? (
+                <Route className="w-3.5 h-3.5 opacity-60" />
+              ) : tooFar ? (
+                <AlertTriangle className="w-3.5 h-3.5" />
+              ) : (
+                <Route className="w-3.5 h-3.5" />
+              )}
+              {/* ΚΑΜΙΑ τιμή όσο υπολογίζεται — ποτέ η ευθεία ως «προσωρινή». */}
+              {distance.loading ? 'Υπολογισμός διαδρομής…' : formatKm(distanceKm)}
+              {/* Ποια απόσταση βλέπει το μαγαζί: οδική ή (εφεδρικά) ευθεία.
                   Χρεώνεται αυτό που γράφει εδώ, οπότε δεν το κρύβουμε. */}
-              <span className="font-normal opacity-70">
-                {distance.loading
-                  ? '· υπολογισμός διαδρομής…'
-                  : distance.source === 'road'
-                  ? `· οδικά${distance.minutes !== null ? ` · ~${distance.minutes}′` : ''}`
-                  : '· σε ευθεία'}
-              </span>
+              {!distance.loading && (
+                <span className="font-normal opacity-70">
+                  {distance.source === 'road'
+                    ? `· οδικά${distance.minutes !== null ? ` · ~${distance.minutes}′` : ''}`
+                    : '· σε ευθεία'}
+                </span>
+              )}
+              {/* Ο ΑΡΙΘΜΟΣ ΔΕΝ ΒΡΕΘΗΚΕ: το σημείο είναι του δρόμου, όχι του κτιρίου.
+                  Σε δρόμο 2 χλμ (π.χ. Κ. Καραμανλή) αυτό είναι έως 2 χλμ σφάλμα και
+                  έως 3,90 € λάθος χρέωση. Επειδή χρεώνεται ό,τι γράφει το badge,
+                  η ανακρίβεια πρέπει να είναι ΟΡΑΤΗ — όχι σιωπηλή. */}
+              {!distance.loading && !destExact && dest !== null && splitAddress(address).number && (
+                <span className="font-normal opacity-70">· κατά προσέγγιση</span>
+              )}
             </span>
-            {tooFar ? (
+            {/* Όσο υπολογίζεται ΔΕΝ λέμε τίποτα για χρέωση: με km = null το
+                surcharge είναι 0, οπότε θα γράφαμε «Χωρίς επιπλέον χρέωση» σε
+                μια διεύθυνση που μπορεί να καταλήξει χρεώσιμη. */}
+            {distance.loading ? null : tooFar ? (
               <span>Πάνω από το όριο των {MAX_DISTANCE_KM} χλμ — δεν επιτρέπεται</span>
             ) : surcharge > 0 ? (
               <span>Επιπλέον χρέωση {formatEuro(surcharge)}</span>
             ) : (
               <span>Χωρίς επιπλέον χρέωση</span>
             )}
-
-            {/* Αποθήκευση της διεύθυνσης για μελλοντική χρήση */}
-            {canSaveCurrent && savingLabel === null && !tooFar && (
-              <button
-                type="button"
-                onClick={() => setSavingLabel('')}
-                className="ml-auto inline-flex items-center gap-1 underline opacity-80 hover:opacity-100"
-                title="Αποθήκευση αυτής της διεύθυνσης"
-              >
-                <Save className="w-3.5 h-3.5" />
-                Αποθήκευση
-              </button>
-            )}
           </div>
         )}
 
-        {/* Inline πεδίο ονόματος για την αποθήκευση */}
-        {savingLabel !== null && (
-          <div className="mb-2 flex gap-2">
-            <input
-              type="text"
-              autoFocus
-              placeholder="Όνομα (π.χ. LIDL)"
-              value={savingLabel}
-              onChange={(e) => setSavingLabel(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') { e.preventDefault(); handleSaveAddress(); }
-                if (e.key === 'Escape') setSavingLabel(null);
-              }}
-              style={{ ...inputStyle, flex: 1 }}
-            />
-            <button
-              type="button"
-              onClick={handleSaveAddress}
-              className="px-3 rounded-lg text-xs font-bold text-white shrink-0"
-              style={{ background: 'linear-gradient(135deg, var(--accent), var(--accent-hover))' }}
-            >
-              Αποθήκευση
-            </button>
-            <button
-              type="button"
-              onClick={() => setSavingLabel(null)}
-              className="px-3 rounded-lg text-xs font-semibold shrink-0"
-              style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}
-            >
-              Άκυρο
-            </button>
-          </div>
-        )}
+        {/* Η αποθήκευση διεύθυνσης ΔΕΝ προτείνεται εδώ (απόφαση χρήστη): το inline
+            κουμπί εμφανιζόταν σε κάθε πληκτρολόγηση οδού και ενοχλούσε στη ροή
+            της παραγγελίας. Ζει αποκλειστικά στον AddressPicker, όπου υπάρχει
+            ολόκληρη οθόνη γι' αυτό (λίστα, ονομασία, διαγραφή, πινέζα χάρτη). */}
 
         {/* Attribution (απαίτηση δωρεάν πλάνου Geoapify) */}
         <p className="mb-4 text-[10px]" style={{ color: 'var(--text-muted)' }}>
