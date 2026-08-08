@@ -34,6 +34,17 @@ const MAX_SAVED = 10;     // όριο αποθηκευμένων διευθύν�
 // Προεπιλογές καθυστέρησης αποστολής (λεπτά). 0 = άμεσα.
 const DELAY_PRESETS = [0, 5, 10, 15];
 
+/** Λεπτά μέχρι την επόμενη φορά που «χτυπάει» η ώρα hh:mm σήμερα (0 αν έχει ήδη περάσει). */
+function clockTimeDelayMinutes(hhmm: string): number {
+  if (!hhmm) return 0;
+  const [h, m] = hhmm.split(':').map(Number);
+  if (Number.isNaN(h) || Number.isNaN(m)) return 0;
+  const target = new Date();
+  target.setHours(h, m, 0, 0);
+  const diffMs = target.getTime() - Date.now();
+  return diffMs > 0 ? Math.ceil(diffMs / 60000) : 0;
+}
+
 // Σύγκριση χωρίς τόνους/κεφαλαία (και ς→σ) για το τοπικό φιλτράρισμα.
 const norm = (s: string) =>
   s.toLowerCase().replace(/ς/g, 'σ').normalize('NFD').replace(/[̀-ͯ]/g, '');
@@ -85,9 +96,10 @@ export default function OrderCreationForm({
   // ακριβές και δεν δέχεται αριθμό — «Coffee Train 5» δεν σημαίνει τίποτα.
   const destIsPlaceRef = useRef(false);
 
-  // ── Καθυστερημένη αποστολή ──
+  // ── Καθυστερημένη αποστολή ── (-1 = χειροκίνητα λεπτά, -2 = συγκεκριμένη ώρα ρολογιού σήμερα)
   const [delayMinutes, setDelayMinutes] = useState(0);
   const [customDelay, setCustomDelay] = useState('');
+  const [scheduledTime, setScheduledTime] = useState('');
 
   // ── Αποθηκευμένες διευθύνσεις ──
   const [saved, setSaved] = useState<SavedAddress[]>([]);
@@ -325,7 +337,12 @@ export default function OrderCreationForm({
   const surcharge = distanceKm !== null ? surchargeFor(distanceKm) : 0;
   const tooFar = distanceKm !== null && distanceKm > MAX_DISTANCE_KM;
 
-  const effectiveDelay = delayMinutes === -1 ? parseInt(customDelay, 10) || 0 : delayMinutes;
+  const effectiveDelay =
+    delayMinutes === -1
+      ? parseInt(customDelay, 10) || 0
+      : delayMinutes === -2
+      ? clockTimeDelayMinutes(scheduledTime)
+      : delayMinutes;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -366,6 +383,17 @@ export default function OrderCreationForm({
         { title: 'Επιπλέον χρέωση απόστασης', confirmLabel: 'Συνέχεια' }
       );
       if (!ok) return;
+    }
+
+    if (delayMinutes === -2) {
+      if (!scheduledTime) {
+        toast.error('Επιλέξτε ώρα αποστολής.');
+        return;
+      }
+      if (effectiveDelay <= 0) {
+        toast.error('Η ώρα που επιλέξατε έχει ήδη περάσει.');
+        return;
+      }
     }
 
     setIsSubmitting(true);
@@ -411,6 +439,7 @@ export default function OrderCreationForm({
       destIsPlaceRef.current = false;
       setDelayMinutes(0);
       setCustomDelay('');
+      setScheduledTime('');
       setSuggestions([]);
       setShowSuggestions(false);
       toast.success(
@@ -444,7 +473,7 @@ export default function OrderCreationForm({
 
       <form
         onSubmit={handleSubmit}
-        className="p-6 rounded-2xl"
+        className="p-6 rounded-2xl card-surface"
         style={{
           backgroundColor: 'var(--bg-card)',
           border: '2px solid var(--accent)',
@@ -721,6 +750,18 @@ export default function OrderCreationForm({
             >
               Άλλο
             </button>
+            <button
+              type="button"
+              onClick={() => setDelayMinutes(-2)}
+              className="flex-1 py-2 rounded-lg text-xs font-semibold transition-all duration-200"
+              style={
+                delayMinutes === -2
+                  ? { background: 'linear-gradient(135deg, var(--accent), var(--accent-hover))', color: '#fff' }
+                  : { color: 'var(--text-secondary)', backgroundColor: 'transparent' }
+              }
+            >
+              Ώρα
+            </button>
           </div>
           {delayMinutes === -1 && (
             <input
@@ -730,6 +771,15 @@ export default function OrderCreationForm({
               placeholder="Λεπτά καθυστέρησης"
               value={customDelay}
               onChange={(e) => setCustomDelay(e.target.value)}
+              style={inputStyle}
+            />
+          )}
+          {delayMinutes === -2 && (
+            <input
+              type="time"
+              placeholder="Ώρα αποστολής"
+              value={scheduledTime}
+              onChange={(e) => setScheduledTime(e.target.value)}
               style={inputStyle}
             />
           )}

@@ -24,7 +24,7 @@ export default function LoginPage() {
 
       {/* Card */}
       <div
-        className="w-full max-w-md relative animate-scale-in"
+        className="w-full max-w-md relative animate-scale-in card-surface"
         style={{
           backgroundColor: 'var(--bg-card)',
           border: '1px solid var(--border-default)',

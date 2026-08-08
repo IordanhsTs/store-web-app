@@ -54,12 +54,14 @@ export default function ActiveOrdersList({ storeId }: { storeId: string }) {
     }
   };
 
-  // ── Αρίθμηση ανά κατάσταση (αίτημα πελάτη: «1 2 3 ενεργές και 1 2 3 αποδεκτές») ──
-  // Απλή θέση μέσα στη λίστα της κάθε κατάστασης, ΟΧΙ μόνιμος κωδικός παραγγελίας.
+  // ── Αρίθμηση (client feedback 08/08: μια σειρά κοινή για ενεργές+αποδεκτές, ΟΧΙ
+  // ξεχωριστή ανά κατάσταση όπως πριν — έτσι όταν η #3 ολοκληρώνεται, η #4 γίνεται #3.)
+  // Απλή θέση μέσα στη λίστα, ΟΧΙ μόνιμος κωδικός παραγγελίας.
   const positions = new Map<string, number>();
-  (['scheduled', 'pending', 'accepted'] as const).forEach((status) => {
-    orders.filter((o) => o.status === status).forEach((o, i) => positions.set(o.id, i + 1));
-  });
+  orders
+    .filter((o) => o.status === 'pending' || o.status === 'accepted')
+    .forEach((o, i) => positions.set(o.id, i + 1));
+  orders.filter((o) => o.status === 'scheduled').forEach((o, i) => positions.set(o.id, i + 1));
 
   /* ── Τίτλος ── */
   const header = (
@@ -79,7 +81,7 @@ export default function ActiveOrdersList({ storeId }: { storeId: string }) {
         {[1, 2, 3].map(i => (
           <div
             key={i}
-            className="p-5 rounded-2xl"
+            className="p-5 rounded-2xl card-surface"
             style={{
               backgroundColor: 'var(--bg-card)',
               border: '1px solid var(--border-default)',
@@ -111,7 +113,7 @@ export default function ActiveOrdersList({ storeId }: { storeId: string }) {
       <>
         {header}
         <div
-          className="flex flex-col items-center justify-center py-20 rounded-2xl text-center transition-all duration-300 hover:-translate-y-1 hover:shadow-xl cursor-default"
+          className="flex flex-col items-center justify-center py-20 rounded-2xl text-center transition-all duration-300 hover:-translate-y-1 hover:shadow-xl cursor-default card-surface"
         style={{
           backgroundColor: 'var(--bg-card)',
           border: '1px dashed var(--border-default)',
@@ -154,7 +156,7 @@ export default function ActiveOrdersList({ storeId }: { storeId: string }) {
           return (
             <div
               key={order.id}
-              className="animate-fade-in-up relative overflow-hidden transition-all duration-300 hover:-translate-y-1.5 hover:shadow-lg group"
+              className="animate-fade-in-up relative overflow-hidden transition-all duration-300 hover:-translate-y-1.5 hover:shadow-lg group card-surface"
               style={{
                 backgroundColor: 'var(--bg-card)',
                 borderRadius: '20px',

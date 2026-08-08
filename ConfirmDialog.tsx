@@ -66,7 +66,7 @@ export default function ConfirmDialogHost() {
       <div
         role="alertdialog"
         aria-modal="true"
-        className="relative w-full max-w-sm p-5 rounded-2xl shadow-2xl animate-scale-in"
+        className="relative w-full max-w-sm p-5 rounded-2xl shadow-2xl animate-scale-in card-surface"
         style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-default)' }}
       >
         <div className="flex items-start gap-3 mb-5">

@@ -81,7 +81,7 @@ export default async function DashboardPage() {
         style={{ backgroundColor: 'var(--bg-primary)' }}
       >
         <div
-          className="p-8 rounded-2xl text-center max-w-md"
+          className="p-8 rounded-2xl text-center max-w-md card-surface"
           style={{
             backgroundColor: 'var(--bg-card)',
             border: '1px solid var(--border-default)',
@@ -101,7 +101,7 @@ export default async function DashboardPage() {
         style={{ backgroundColor: 'var(--bg-primary)' }}
       >
         <div
-          className="p-8 rounded-2xl text-center max-w-md space-y-4"
+          className="p-8 rounded-2xl text-center max-w-md space-y-4 card-surface"
           style={{
             backgroundColor: 'var(--bg-card)',
             border: '1px solid var(--danger-border)',

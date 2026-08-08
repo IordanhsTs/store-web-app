@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { X, TrendingUp, Clock, Car, BarChart2, Award, List, MapPin, CreditCard, Banknote, ChevronRight } from 'lucide-react';
-import { subDays, differenceInMinutes, startOfDay, endOfDay } from 'date-fns';
+import { differenceInMinutes } from 'date-fns';
 import { supabase } from './lib/supabase';
 
 interface HistoryStatsModalProps {
@@ -21,6 +21,33 @@ type CompletedOrder = {
   payment_method: 'cash' | 'card';
   drivers: { full_name: string } | null;
 };
+
+/** Offset Αθήνας-UTC σε λεπτά για τη δεδομένη στιγμή (χειρίζεται DST αυτόματα). */
+function athensOffsetMinutes(date: Date): number {
+  const part = new Intl.DateTimeFormat('en-US', { timeZone: 'Europe/Athens', timeZoneName: 'shortOffset' })
+    .formatToParts(date)
+    .find((p) => p.type === 'timeZoneName')?.value;
+  const match = part?.match(/GMT([+-]\d+)/);
+  return match ? parseInt(match[1], 10) * 60 : 120;
+}
+
+/**
+ * Όρια 00:00–23:59:59.999 ώρας Αθήνας για «N μέρες πριν», ανεξάρτητα από τη ζώνη ώρας
+ * της συσκευής (client feedback: το «σήμερα» έπρεπε να είναι ρητά Ελλάδα, όχι browser-local).
+ */
+function athensDayBoundsISO(daysAgo: number): { start: string; end: string } {
+  const offsetMin = athensOffsetMinutes(new Date());
+  const athensNow = new Date(Date.now() + offsetMin * 60000);
+  const y = athensNow.getUTCFullYear();
+  const m = athensNow.getUTCMonth();
+  const d = athensNow.getUTCDate() - daysAgo;
+  const startAthensAsUtc = Date.UTC(y, m, d, 0, 0, 0, 0);
+  const endAthensAsUtc = Date.UTC(y, m, d, 23, 59, 59, 999);
+  return {
+    start: new Date(startAthensAsUtc - offsetMin * 60000).toISOString(),
+    end: new Date(endAthensAsUtc - offsetMin * 60000).toISOString(),
+  };
+}
 
 const DATE_FILTERS = [
   { label: 'Σήμερα', val: 0 },
@@ -53,8 +80,8 @@ export default function HistoryStatsModal({ isOpen, onClose, storeId }: HistoryS
         startDate = new Date(customStart).toISOString();
         endDate = new Date(customEnd).toISOString();
       } else {
-        startDate = startOfDay(subDays(new Date(), dateRange)).toISOString();
-        endDate = endOfDay(new Date()).toISOString();
+        startDate = athensDayBoundsISO(dateRange).start;
+        endDate = athensDayBoundsISO(0).end;
       }
 
       const { data, error } = await supabase
@@ -373,6 +400,7 @@ export default function HistoryStatsModal({ isOpen, onClose, storeId }: HistoryS
                               return (
                                 <tr
                                   key={driver}
+                                  className="card-surface"
                                   style={{
                                     borderTop: idx > 0 ? '1px solid var(--border-subtle)' : 'none',
                                     backgroundColor: 'var(--bg-card)',
@@ -531,7 +559,7 @@ export default function HistoryStatsModal({ isOpen, onClose, storeId }: HistoryS
                   return (
                     <div
                       key={order.id}
-                      className="rounded-2xl p-4 flex flex-col gap-3 transition-all duration-150"
+                      className="rounded-2xl p-4 flex flex-col gap-3 transition-all duration-150 card-surface"
                       style={{
                         backgroundColor: 'var(--bg-card)',
                         border: '1px solid var(--border-default)',

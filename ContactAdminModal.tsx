@@ -60,7 +60,7 @@ export default function ContactAdminModal({
 
       <form
         onSubmit={handleSend}
-        className="relative w-full max-w-md p-6 rounded-2xl shadow-2xl animate-scale-in overflow-hidden"
+        className="relative w-full max-w-md p-6 rounded-2xl shadow-2xl animate-scale-in overflow-hidden card-surface"
         style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-default)' }}
       >
         {/* Η μπάρα την κόβει το overflow-hidden του πλαισίου: δικό της border-radius
