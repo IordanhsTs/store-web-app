@@ -1,7 +1,7 @@
 'use client';
 
 import { useTheme } from 'next-themes';
-import { Moon, Sun, LogOut, BarChart3, Store, Volume2, VolumeX, Snowflake, Zap, Flame, MessageSquare } from 'lucide-react';
+import { Moon, Sun, LogOut, BarChart3, Store, Volume2, VolumeX, Snowflake, Zap, Flame, MessageSquare, Menu, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import HistoryStatsModal from './HistoryStatsModal';
 import ContactAdminModal from './ContactAdminModal';
@@ -78,6 +78,7 @@ export default function Navbar({ storeId, storeName }: { storeId: string; storeN
   const [mounted, setMounted] = useState(false);
   const [isHistoryModalOpen, setHistoryModalOpen] = useState(false);
   const [isContactModalOpen, setContactModalOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const router = useRouter();
 
   const [isSoundEnabled, setIsSoundEnabled] = useState(true);
@@ -174,8 +175,10 @@ export default function Navbar({ storeId, storeName }: { storeId: string; storeN
               <SystemLoadBadge />
             </div>
 
-            {/* Actions */}
-            <div className="flex items-center gap-1">
+            {/* Actions — desktop: όλα ορατά σε μία γραμμή. Σε στενή οθόνη δεν
+                χωράνε 5 κουμπιά δίπλα στο όνομα καταστήματος, γι' αυτό εδώ
+                κρύβονται υπέρ του hamburger menu παρακάτω. */}
+            <div className="hidden sm:flex items-center gap-1">
               {/* Μήνυμα στον διαχειριστή */}
               <button
                 onClick={() => setContactModalOpen(true)}
@@ -294,8 +297,88 @@ export default function Navbar({ storeId, storeName }: { storeId: string; storeN
                 <LogOut className="w-5 h-5" />
               </button>
             </div>
+
+            {/* Actions — mobile: ένα κουμπί, όλα τα υπόλοιπα μέσα στο dropdown από κάτω. */}
+            <div className="sm:hidden">
+              <button
+                onClick={() => setMobileMenuOpen(o => !o)}
+                className="p-2 rounded-lg transition-all duration-150"
+                style={{ color: 'var(--text-muted)' }}
+                aria-label={mobileMenuOpen ? 'Κλείσιμο μενού' : 'Άνοιγμα μενού'}
+                aria-expanded={mobileMenuOpen}
+              >
+                {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+              </button>
+            </div>
           </div>
         </div>
+
+        {/* Mobile dropdown — λίστα με ετικέτες αντί για γυμνά εικονίδια, μια φορά
+            τη φορά κλείνει ξανά μόλις πατηθεί κάτι, ώστε να μη μένει ανοιχτό πάνω
+            από τη λίστα παραγγελιών. */}
+        {mobileMenuOpen && (
+          <div
+            className="sm:hidden border-t"
+            style={{ backgroundColor: 'var(--nav-bg)', borderColor: 'var(--nav-border)' }}
+          >
+            <div className="max-w-7xl mx-auto px-4 py-2 flex flex-col">
+              <button
+                onClick={() => { setContactModalOpen(true); setMobileMenuOpen(false); }}
+                className="flex items-center gap-3 px-2 py-3 rounded-lg text-sm font-medium text-left"
+                style={{ color: 'var(--text-primary)' }}
+              >
+                <MessageSquare className="w-5 h-5 shrink-0" style={{ color: 'var(--text-muted)' }} />
+                Μήνυμα στο κέντρο ελέγχου
+              </button>
+
+              <button
+                onClick={() => { setHistoryModalOpen(true); setMobileMenuOpen(false); }}
+                className="flex items-center gap-3 px-2 py-3 rounded-lg text-sm font-medium text-left"
+                style={{ color: 'var(--text-primary)' }}
+              >
+                <BarChart3 className="w-5 h-5 shrink-0" style={{ color: 'var(--text-muted)' }} />
+                Ιστορικό &amp; Στατιστικά
+              </button>
+
+              {mounted && (
+                <button
+                  onClick={() => { setTheme(isDark ? 'light' : 'dark'); setMobileMenuOpen(false); }}
+                  className="flex items-center gap-3 px-2 py-3 rounded-lg text-sm font-medium text-left"
+                  style={{ color: 'var(--text-primary)' }}
+                >
+                  {isDark
+                    ? <Sun className="w-5 h-5 shrink-0" style={{ color: 'var(--text-muted)' }} />
+                    : <Moon className="w-5 h-5 shrink-0" style={{ color: 'var(--text-muted)' }} />}
+                  {isDark ? 'Φωτεινό θέμα' : 'Σκούρο θέμα'}
+                </button>
+              )}
+
+              {mounted && (
+                <button
+                  onClick={() => { toggleSound(); setMobileMenuOpen(false); }}
+                  className="flex items-center gap-3 px-2 py-3 rounded-lg text-sm font-medium text-left"
+                  style={{ color: 'var(--text-primary)' }}
+                >
+                  {isSoundEnabled
+                    ? <Volume2 className="w-5 h-5 shrink-0" style={{ color: 'var(--accent)' }} />
+                    : <VolumeX className="w-5 h-5 shrink-0" style={{ color: 'var(--text-muted)' }} />}
+                  {isSoundEnabled ? 'Ενεργοί ήχοι ειδοποιήσεων' : 'Ήχοι σε σίγαση'}
+                </button>
+              )}
+
+              <div className="h-px my-1" style={{ backgroundColor: 'var(--border-default)' }} />
+
+              <button
+                onClick={() => { setMobileMenuOpen(false); handleLogout(); }}
+                className="flex items-center gap-3 px-2 py-3 rounded-lg text-sm font-medium text-left"
+                style={{ color: 'var(--danger)' }}
+              >
+                <LogOut className="w-5 h-5 shrink-0" />
+                Αποσύνδεση
+              </button>
+            </div>
+          </div>
+        )}
       </nav>
 
       <HistoryStatsModal
