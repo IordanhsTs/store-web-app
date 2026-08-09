@@ -3,13 +3,10 @@
 import { MapContainer, TileLayer, Marker, Tooltip, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { useTheme } from 'next-themes';
 
 // Ίδια δωρεάν tiles με τον υπόλοιπο στόλο χαρτών (admin LiveMap, DriverMapLeaflet).
-const TILE_URLS = {
-  dark: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
-  light: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
-};
+// Ίδιος χάρτης σε light και dark theme (client feedback 09/08) — δεν εναλλάσσουμε πια σε dark_all.
+const TILE_URL = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png';
 
 type LatLng = { lat: number; lon: number };
 
@@ -34,11 +31,6 @@ function ClickHandler({ onPick }: { onPick: (p: LatLng) => void }) {
 }
 
 export default function AddressPickerMap({ center, origin, pin, onPick }: Props) {
-  // Το component φορτώνεται πάντα με ssr:false (βλ. AddressPicker), οπότε το
-  // `resolvedTheme` είναι ασφαλές εδώ.
-  const { resolvedTheme } = useTheme();
-  const isDark = resolvedTheme !== 'light';
-
   const pinIcon = L.divIcon({
     className: 'vertex-pick-icon',
     html: `<div style="width:34px;height:34px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:#C5A066;border:2px solid #fff;box-shadow:0 3px 10px rgba(0,0,0,0.5)"></div>`,
@@ -73,11 +65,11 @@ export default function AddressPickerMap({ center, origin, pin, onPick }: Props)
         zoom={15}
         scrollWheelZoom
         className="h-full w-full"
-        style={{ background: isDark ? '#0d0d0d' : '#f8f5f0' }}
+        style={{ background: '#f8f5f0' }}
       >
         <TileLayer
           attribution='&copy; <a href="https://carto.com/">Carto</a> · OpenStreetMap'
-          url={isDark ? TILE_URLS.dark : TILE_URLS.light}
+          url={TILE_URL}
         />
         <ClickHandler onPick={onPick} />
 

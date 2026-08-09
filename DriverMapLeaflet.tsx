@@ -3,13 +3,10 @@
 import { MapContainer, TileLayer, Marker, Tooltip } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { useTheme } from 'next-themes';
 
 // Δωρεάν tiles (Carto) — ίδιο σχήμα με τον admin (delivery-admin/src/LiveMap.jsx).
-const TILE_URLS = {
-  dark: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
-  light: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
-};
+// Ίδιος χάρτης σε light και dark theme (client feedback 09/08) — δεν εναλλάσσουμε πια σε dark_all.
+const TILE_URL = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png';
 
 interface Props {
   lat: number;
@@ -19,11 +16,6 @@ interface Props {
 }
 
 export default function DriverMapLeaflet({ lat, lng, driverName = 'Διανομέας', isBusy = true }: Props) {
-  // Αυτό το component είναι ήδη ssr:false (βλ. DriverMapInline), άρα ασφαλές default
-  // 'dark' όσο το next-themes δεν έχει ακόμα resolve το πραγματικό theme.
-  const { resolvedTheme } = useTheme();
-  const isDark = resolvedTheme !== 'light';
-  const tileUrl = isDark ? TILE_URLS.dark : TILE_URLS.light;
   const color = isBusy ? '#38EF7D' : '#C5A066';
   const glow = isBusy ? 'rgba(56,239,125,0.6)' : 'rgba(197,160,102,0.6)';
 
@@ -59,11 +51,11 @@ export default function DriverMapLeaflet({ lat, lng, driverName = 'Διανομ�
         zoomControl={true}
         scrollWheelZoom={false}
         className="h-[300px] w-full"
-        style={{ background: isDark ? '#0d0d0d' : '#f8f5f0' }}
+        style={{ background: '#f8f5f0' }}
       >
         <TileLayer
           attribution='&copy; <a href="https://carto.com/">Carto</a> · OpenStreetMap'
-          url={tileUrl}
+          url={TILE_URL}
         />
         <Marker position={[lat, lng]} icon={icon}>
           <Tooltip direction="top" offset={[0, -22]} permanent className="vertex-map-tt">
