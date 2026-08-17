@@ -30,6 +30,16 @@ type Suggestion = {
 
 const MIN_CHARS = 3;      // δεν ψάχνουμε πριν από τόσα γράμματα (όσα δέχεται και το API route)
 const DEBOUNCE_MS = 200;  // περιμένουμε να σταματήσει το πληκτρολόγιο
+// Πόσο περιμένουμε, μετά την επιλογή δρόμου, πριν ζητήσουμε ΧΡΕΩΣΙΜΑ το σημείο
+// του δρόμου από τη Google. Αν μέσα σε αυτό το διάστημα γραφτεί αριθμός, η κλήση
+// ακυρώνεται εντελώς (βλ. scheduleStreetPoint).
+//
+// Γιατί τόσο μεγάλο: ο υπάλληλος συχνά κοιτάζει το σημείωμα ή ρωτάει τον πελάτη
+// πριν γράψει τον αριθμό. Κάθε δευτερόλεπτο αναμονής εδώ γλιτώνει μια χρέωση.
+// Το τίμημα αφορά ΜΟΝΟ διευθύνσεις χωρίς αριθμό (χωριά): εκεί η απόσταση
+// εμφανίζεται τόσο αργότερα — και μόνο αν ο χρήστης δεν φύγει από το πεδίο,
+// γιατί το blur τη ζητά αμέσως (βλ. flushStreetPoint).
+const STREET_POINT_DELAY_MS = 3000;
 const MAX_SAVED = 10;     // όριο αποθηκευμένων διευθύνσεων ανά κατάστημα (απόφαση χρήστη)
 
 // Προεπιλογές καθυστέρησης αποστολής (λεπτά). 0 = άμεσα.
@@ -96,6 +106,11 @@ export default function OrderCreationForm({
   // Το τρέχον σημείο προήλθε από ΚΑΤΑΣΤΗΜΑ (POI), όχι από οδό. Τότε είναι ήδη
   // ακριβές και δεν δέχεται αριθμό — «Coffee Train 5» δεν σημαίνει τίποτα.
   const destIsPlaceRef = useRef(false);
+  // Ο επιλεγμένος δρόμος, μέχρι να χρειαστεί πραγματικά το σημείο του. Βλ.
+  // scheduleStreetPoint: το κρατάμε ώστε να μπορούμε να ζητήσουμε το σημείο
+  // ΑΡΓΟΤΕΡΑ (ή ποτέ, αν ακολουθήσει αριθμός).
+  const pendingStreetPlaceIdRef = useRef<string | null>(null);
+  const streetPointTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Καθυστερημένη αποστολή ── (-1 = χειροκίνητα λεπτά, -2 = συγκεκριμένη ώρα ρολογιού σήμερα)
   const [delayMinutes, setDelayMinutes] = useState(0);
@@ -125,6 +140,7 @@ export default function OrderCreationForm({
   useEffect(() => () => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (overrideDebounceRef.current) clearTimeout(overrideDebounceRef.current);
+    if (streetPointTimerRef.current) clearTimeout(streetPointTimerRef.current);
     abortRef.current?.abort();
   }, []);
 
@@ -200,12 +216,17 @@ export default function OrderCreationForm({
 
   // ΧΕΙΡΟΚΙΝΗΤΟ OVERRIDE ανά τμήμα δρόμου (βλ. migration 0012_street_segment_overrides):
   // κάποιοι δρόμοι είναι αρκετά μεγάλοι ώστε ο αριθμός να αλλάζει ουσιαστικά την
-  // απόσταση, και ένα χειροκίνητο εύρος υπερισχύει ό,τι κι αν πει ο provider. Αν
-  // δεν υπάρχει override, ρωτάμε τη Google για «δρόμος αριθμός» — αν το top
-  // αποτέλεσμα είναι σε επίπεδο συγκεκριμένου κτιρίου (street_address/premise),
-  // εμπιστευόμαστε το σημείο της· διαφορετικά ο caller κρατά το σημείο-κέντρο
-  // του δρόμου, σημαδεμένο ως ανακριβές. Αόρατο για τον χρήστη, καμία ερώτηση/κλικ.
-  const resolveNumberPoint = async (street: string, numberStr: string) => {
+  // απόσταση, και ένα χειροκίνητο εύρος υπερισχύει ό,τι κι αν πει ο provider.
+  //
+  // Αν δεν υπάρχει override, ρωτάμε τη Google για «δρόμος αριθμός». ΜΙΑ κλήση
+  // καλύπτει ΚΑΙ τις δύο περιπτώσεις: όταν ξέρει τον αριθμό γυρνάει
+  // street_address (exact), όταν ΔΕΝ τον ξέρει γυρνάει τον ίδιο τον δρόμο
+  // (route) — δηλαδή ακριβώς το σημείο-fallback που θέλαμε, χωρίς να το
+  // πληρώσουμε ξεχωριστά. Γι' αυτό επιστρέφουμε και το `exact`.
+  const resolveNumberPoint = async (
+    street: string,
+    numberStr: string
+  ): Promise<{ lat: number; lon: number; exact: boolean } | null> => {
     const n = parseInt(numberStr, 10);
     if (!Number.isFinite(n)) return null;
 
@@ -216,7 +237,7 @@ export default function OrderCreationForm({
     if (!error && data && data.length > 0) {
       const row = data[0];
       if (typeof row.latitude === 'number' && typeof row.longitude === 'number') {
-        return { lat: row.latitude, lon: row.longitude };
+        return { lat: row.latitude, lon: row.longitude, exact: true };
       }
     }
 
@@ -230,10 +251,64 @@ export default function OrderCreationForm({
       const top: Suggestion | undefined = data.suggestions?.[0];
       if (!top) return null;
       const details = await fetchPlaceDetails(top.placeId);
-      if (details?.exact) return { lat: details.lat, lon: details.lon };
+      if (details) return { lat: details.lat, lon: details.lon, exact: details.exact };
     } catch {}
 
     return null;
+  };
+
+  /**
+   * Εφαρμόζει το σημείο για «δρόμος + αριθμός». Το σημείο-fallback του δρόμου
+   * έρχεται από την ΙΔΙΑ κλήση (exact=false), οπότε το κρατάμε στο baseDestRef
+   * για την περίπτωση που ο χρήστης σβήσει τον αριθμό.
+   */
+  const applyNumberPoint = async (streetForLookup: string, numberStr: string) => {
+    const res = await resolveNumberPoint(streetForLookup, numberStr);
+    // Άλλαξε ο δρόμος όσο περιμέναμε → η απάντηση δεν μας αφορά πια.
+    if (destStreetRef.current !== streetForLookup) return;
+    if (!res) return;
+    setDest({ lat: res.lat, lon: res.lon });
+    setDestExact(res.exact);
+    if (!res.exact) baseDestRef.current = { lat: res.lat, lon: res.lon };
+  };
+
+  /** Το σημείο ΤΟΥ ΔΡΟΜΟΥ (χωρίς αριθμό) — μία χρεώσιμη κλήση. */
+  const fetchStreetPoint = async (streetForLookup: string, placeId: string) => {
+    const details = await fetchPlaceDetails(placeId);
+    if (destStreetRef.current !== streetForLookup) return;
+    const point = details ? { lat: details.lat, lon: details.lon } : null;
+    baseDestRef.current = point;
+    setDest(point);
+    setDestExact(false);
+  };
+
+  /**
+   * Βάζει σε ΑΝΑΜΟΝΗ το αίτημα για το σημείο του δρόμου.
+   *
+   * ΚΟΣΤΟΣ (μετρημένο 17/08/2026): σχεδόν πάντα ο χρήστης γράφει αριθμό αμέσως
+   * μετά την επιλογή δρόμου. Όταν ζητούσαμε το σημείο του δρόμου αμέσως, το
+   * πληρώναμε και το πετούσαμε ένα δευτερόλεπτο αργότερα — 2 χρεώσιμες κλήσεις
+   * ανά διεύθυνση αντί για 1 (≈92€/μήνα αντί για ≈23€ στις 15.000 διευθύνσεις).
+   * Με την αναμονή, η κλήση γίνεται ΜΟΝΟ όταν δεν ακολουθεί αριθμός.
+   */
+  const scheduleStreetPoint = (streetForLookup: string) => {
+    if (streetPointTimerRef.current) clearTimeout(streetPointTimerRef.current);
+    const placeId = pendingStreetPlaceIdRef.current;
+    if (!placeId) return;
+    streetPointTimerRef.current = setTimeout(
+      () => fetchStreetPoint(streetForLookup, placeId),
+      STREET_POINT_DELAY_MS
+    );
+  };
+
+  /** Ο χρήστης έφυγε από το πεδίο: ό,τι περίμενε, το ζητάμε τώρα. */
+  const flushStreetPoint = () => {
+    if (!streetPointTimerRef.current) return;
+    clearTimeout(streetPointTimerRef.current);
+    streetPointTimerRef.current = null;
+    const placeId = pendingStreetPlaceIdRef.current;
+    const street = destStreetRef.current;
+    if (placeId && street) fetchStreetPoint(street, placeId);
   };
 
   const onAddressChange = (value: string) => {
@@ -251,26 +326,32 @@ export default function OrderCreationForm({
       baseDestRef.current = null;
       destStreetRef.current = null;
       destIsPlaceRef.current = false;
+      pendingStreetPlaceIdRef.current = null;
+      if (streetPointTimerRef.current) clearTimeout(streetPointTimerRef.current);
     } else if (destIsPlaceRef.current) {
       // Κατάστημα: το σημείο του POI είναι ήδη ακριβές και δεν αλλάζει με αριθμό.
       setDest(baseDestRef.current);
       setDestExact(true);
-    } else if (baseDestRef.current) {
-      // Ίδιος δρόμος, άλλαξε ο αριθμός: ελέγχουμε αν πέφτει σε καταχωρημένο
-      // override, αλλιώς ξαναγυρνάμε στο σημείο-κέντρο του δρόμου.
+    } else if (destStreetRef.current) {
+      // Ίδιος δρόμος, άλλαξε ο αριθμός. Το `destStreetRef` (και όχι το
+      // `baseDestRef`) είναι το σωστό κριτήριο: το σημείο του δρόμου μπορεί να
+      // μην έχει ζητηθεί ΑΚΟΜΑ — και ιδανικά να μη ζητηθεί ποτέ.
       if (overrideDebounceRef.current) clearTimeout(overrideDebounceRef.current);
       const streetForLookup = destStreetRef.current;
-      const base = baseDestRef.current;
       if (!number) {
-        setDest(base);
-        setDestExact(false);
+        // Έσβησε τον αριθμό: γυρνάμε στο σημείο του δρόμου — ζητώντας το τώρα,
+        // αν δεν το είχαμε ήδη.
+        if (baseDestRef.current) {
+          setDest(baseDestRef.current);
+          setDestExact(false);
+        } else {
+          scheduleStreetPoint(streetForLookup);
+        }
       } else {
+        // Έρχεται αριθμός → το σημείο του σκέτου δρόμου δεν χρειάζεται πια.
+        if (streetPointTimerRef.current) clearTimeout(streetPointTimerRef.current);
         overrideDebounceRef.current = setTimeout(() => {
-          resolveNumberPoint(streetForLookup!, number).then((ov) => {
-            if (destStreetRef.current !== streetForLookup) return;
-            setDest(ov ?? base);
-            setDestExact(ov !== null);
-          });
+          applyNumberPoint(streetForLookup, number);
         }, DEBOUNCE_MS);
       }
     }
@@ -324,28 +405,33 @@ export default function OrderCreationForm({
     setAddress(number ? `${s.street} ${number}` : `${s.street} `);
     // Η πρόταση είναι σημείο ΔΡΟΜΟΥ· γίνεται ακριβής μόνο αν λυθεί ο αριθμός.
     setDestExact(false);
-    const details = await fetchPlaceDetails(s.placeId);
-    const hasCoords = !!details;
-    const basePoint = details ? { lat: details.lat, lon: details.lon } : null;
-    baseDestRef.current = basePoint;
-    setDest(basePoint);
-    // Θυμόμαστε τον δρόμο ώστε το επόμενο onChange (π.χ. πληκτρολόγηση αριθμού)
-    // να ξέρει ότι οι συντεταγμένες εξακολουθούν να ισχύουν.
-    destStreetRef.current = hasCoords ? s.street : null;
+    setDest(null);
+    baseDestRef.current = null;
+    // Θυμόμαστε τον δρόμο ΑΜΕΣΩΣ (χωρίς να περιμένουμε τη Google) ώστε το επόμενο
+    // onChange — δηλαδή η πληκτρολόγηση του αριθμού — να ξέρει ότι είμαστε ακόμα
+    // «μέσα» στον ίδιο δρόμο και να μη μηδενίσει τα πάντα.
+    destStreetRef.current = s.street;
+    pendingStreetPlaceIdRef.current = s.placeId;
 
-    if (hasCoords && number) {
-      resolveNumberPoint(s.street, number).then((ov) => {
-        if (ov && destStreetRef.current === s.street) {
-          setDest(ov);
-          setDestExact(true);
-        }
-      });
+    if (number) {
+      // Υπάρχει ήδη αριθμός: πάμε κατευθείαν στο ακριβές σημείο. Το σημείο του
+      // σκέτου δρόμου δεν χρειάζεται ποτέ, άρα δεν το πληρώνουμε.
+      applyNumberPoint(s.street, number);
+    } else {
+      // Χωρίς αριθμό (ακόμα): η κλήση για το σημείο του δρόμου μπαίνει σε
+      // αναμονή και ακυρώνεται αν ο χρήστης αρχίσει να γράφει αριθμό.
+      scheduleStreetPoint(s.street);
     }
   };
 
   // Εφαρμογή διεύθυνσης από τον επιλογέα — είτε αποθηκευμένη, είτε πινέζα χάρτη.
   const applyPicked = (a: { address: string; lat: number | null; lon: number | null; alreadySaved: boolean }) => {
     setAddress(a.address);
+    // Το σημείο το όρισε άνθρωπος: ακυρώνουμε ό,τι εκκρεμεί προς τη Google, ώστε
+    // μια καθυστερημένη απάντηση να μην έρθει από πάνω και το σβήσει.
+    if (streetPointTimerRef.current) clearTimeout(streetPointTimerRef.current);
+    if (overrideDebounceRef.current) clearTimeout(overrideDebounceRef.current);
+    pendingStreetPlaceIdRef.current = null;
     const hasCoords = a.lat != null && a.lon != null;
     const basePoint = hasCoords ? { lat: a.lat!, lon: a.lon! } : null;
     baseDestRef.current = basePoint;
@@ -535,6 +621,9 @@ export default function OrderCreationForm({
                 e.target.style.boxShadow = 'none';
                 // μικρή καθυστέρηση ώστε να προλάβει το click στην πρόταση
                 setTimeout(() => setShowSuggestions(false), 150);
+                // Έφυγε από το πεδίο χωρίς αριθμό: δεν έχει νόημα να περιμένουμε
+                // άλλο — ζητάμε τώρα το σημείο του δρόμου (βλ. STREET_POINT_DELAY_MS).
+                flushStreetPoint();
               }}
               style={{ ...inputStyle, paddingLeft: '40px', paddingRight: '46px' }}
             />
