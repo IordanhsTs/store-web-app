@@ -19,8 +19,9 @@ import {
 type Suggestion = {
   street: string;
   context: string;
-  lat: number | null;
-  lon: number | null;
+  /** Google Places δεν δίνει συντεταγμένες στις προτάσεις — χρειάζεται
+   *  ξεχωριστό Place Details call (βλ. fetchPlaceDetails) πριν έχουμε σημείο. */
+  placeId: string;
   /** Κατάστημα/σημείο ενδιαφέροντος αντί για οδό (π.χ. «Coffee Train»). */
   isPlace?: boolean;
   /** Η οδός στην οποία βρίσκεται το κατάστημα — μπαίνει στη διεύθυνση. */
@@ -77,17 +78,17 @@ export default function OrderCreationForm({
 
   // ── Συντεταγμένες προορισμού (από την επιλεγμένη πρόταση ή αποθηκευμένη διεύθυνση) ──
   const [dest, setDest] = useState<{ lat: number; lon: number } | null>(null);
-  // Ξέρουμε το σημείο ΤΟΥ ΑΡΙΘΜΟΥ ή μόνο του δρόμου; Το Geoapify δεν το λέει
-  // ποτέ μόνο του (βλ. app/api/resolve-number) — όταν αγνοεί τον αριθμό γυρνάει
-  // σιωπηλά το σημείο του δρόμου, που σε δρόμο 2 χλμ σημαίνει έως 2 χλμ λάθος
-  // και έως 3,90 € λάθος χρέωση. Το κρατάμε ξεχωριστά ώστε να ΦΑΙΝΕΤΑΙ.
+  // Ξέρουμε το σημείο ΤΟΥ ΑΡΙΘΜΟΥ ή μόνο του δρόμου; Η Google το δηλώνει μέσω
+  // του type (street_address/premise vs route) — βλ. googlePlaceDetails στο
+  // lib/google-places.ts. Ένα σημείο-δρόμου σε δρόμο 2 χλμ σημαίνει έως 2 χλμ
+  // λάθος και έως 3,90 € λάθος χρέωση. Το κρατάμε ξεχωριστά ώστε να ΦΑΙΝΕΤΑΙ.
   const [destExact, setDestExact] = useState(false);
   // Ο δρόμος (χωρίς αριθμό) για τον οποίο ισχύουν οι τρέχουσες συντεταγμένες. Η
   // ροή χρήσης είναι «διάλεξε δρόμο από το dropdown, ΜΕΤΑ πληκτρολόγησε αριθμό» —
   // αν το onChange ακύρωνε τις συντεταγμένες σε ΚΑΘΕ πλήκτρο, θα χανόταν η
   // απόσταση ακριβώς τη στιγμή που ο χρήστης προσθέτει τον αριθμό.
   const destStreetRef = useRef<string | null>(null);
-  // Το «ακατέργαστο» σημείο του Geoapify (κέντρο δρόμου) για τον τρέχοντα
+  // Το «ακατέργαστο» σημείο της Google (κέντρο δρόμου) για τον τρέχοντα
   // δρόμο — η βάση στην οποία επιστρέφουμε όταν ο αριθμός δεν ταιριάζει σε
   // κανένα καταχωρημένο override (βλ. street_segments πιο κάτω).
   const baseDestRef = useRef<{ lat: number; lon: number } | null>(null);
@@ -112,6 +113,14 @@ export default function OrderCreationForm({
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const cacheRef = useRef<Map<string, Suggestion[]>>(new Map());
+
+  // ── Google Places session token ──
+  // Ένα token ανά «αναζήτηση» (από την πρώτη πληκτρολόγηση μέχρι να κλειδώσει
+  // ένα σημείο) — κρατά όλα τα ενδιάμεσα autocomplete requests δωρεάν, βλ.
+  // /api/autocomplete. Ανανεώνεται μετά από κάθε ολοκληρωμένο Place Details call
+  // (endSession) και όποτε ξεκινά καινούρια αναζήτηση.
+  const sessionTokenRef = useRef<string>(crypto.randomUUID());
+  const endSession = () => { sessionTokenRef.current = crypto.randomUUID(); };
 
   useEffect(() => () => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -146,9 +155,10 @@ export default function OrderCreationForm({
     const controller = new AbortController();
     abortRef.current = controller;
     try {
-      const res = await fetch(`/api/autocomplete?text=${encodeURIComponent(text)}`, {
-        signal: controller.signal,
-      });
+      const res = await fetch(
+        `/api/autocomplete?text=${encodeURIComponent(text)}&session=${sessionTokenRef.current}`,
+        { signal: controller.signal }
+      );
       const data = await res.json();
       const list: Suggestion[] = data.suggestions || [];
       cacheRef.current.set(text.toLowerCase(), list);
@@ -173,16 +183,28 @@ export default function OrderCreationForm({
     return null;
   };
 
+  // Ένα Place Details call — κλείνει το τρέχον session (βλ. sessionTokenRef).
+  const fetchPlaceDetails = async (placeId: string): Promise<{ lat: number; lon: number; exact: boolean } | null> => {
+    try {
+      const res = await fetch(
+        `/api/place-details?placeId=${encodeURIComponent(placeId)}&session=${sessionTokenRef.current}`
+      );
+      const p = await res.json();
+      endSession();
+      if (typeof p?.lat === 'number' && typeof p?.lon === 'number') {
+        return { lat: p.lat, lon: p.lon, exact: !!p.exact };
+      }
+    } catch {}
+    return null;
+  };
+
   // ΧΕΙΡΟΚΙΝΗΤΟ OVERRIDE ανά τμήμα δρόμου (βλ. migration 0012_street_segment_overrides):
-  // το Geoapify γυρνάει ΕΝΑ σημείο για όλο τον δρόμο — σε μεγάλους δρόμους
-  // (π.χ. μελλοντική πόλη-επέκταση) ο αριθμός μπορεί να αλλάζει ουσιαστικά την
-  // απόσταση. Αν υπάρχει καταχωρημένο εύρος που ταιριάζει, το χρησιμοποιούμε —
-  // αλλιώς μένει το σημείο-κέντρο του δρόμου (baseDestRef). Αόρατο για τον
-  // χρήστη, καμία ερώτηση/κλικ.
-  // Επιστρέφει σημείο ΜΟΝΟ αν ξέρουμε πραγματικά πού πέφτει ο αριθμός. Σειρά:
-  //   1. χειροκίνητο override — άνθρωπος το καταχώρησε, υπερισχύει πάντα
-  //   2. Geoapify ΜΕ τον αριθμό, αν αποδεδειγμένα τον ξέρει (resolve-number)
-  //   3. null → ο caller κρατά το σημείο-κέντρο του δρόμου, σημαδεμένο ως ανακριβές
+  // κάποιοι δρόμοι είναι αρκετά μεγάλοι ώστε ο αριθμός να αλλάζει ουσιαστικά την
+  // απόσταση, και ένα χειροκίνητο εύρος υπερισχύει ό,τι κι αν πει ο provider. Αν
+  // δεν υπάρχει override, ρωτάμε τη Google για «δρόμος αριθμός» — αν το top
+  // αποτέλεσμα είναι σε επίπεδο συγκεκριμένου κτιρίου (street_address/premise),
+  // εμπιστευόμαστε το σημείο της· διαφορετικά ο caller κρατά το σημείο-κέντρο
+  // του δρόμου, σημαδεμένο ως ανακριβές. Αόρατο για τον χρήστη, καμία ερώτηση/κλικ.
   const resolveNumberPoint = async (street: string, numberStr: string) => {
     const n = parseInt(numberStr, 10);
     if (!Number.isFinite(n)) return null;
@@ -202,12 +224,13 @@ export default function OrderCreationForm({
     // ποτέ μπλοκαρισμένη παραγγελία.
     try {
       const res = await fetch(
-        `/api/resolve-number?street=${encodeURIComponent(street)}&number=${encodeURIComponent(numberStr)}`
+        `/api/autocomplete?text=${encodeURIComponent(`${street} ${numberStr}`)}&session=${sessionTokenRef.current}`
       );
-      const p = await res.json();
-      if (p?.precise && typeof p.lat === 'number' && typeof p.lon === 'number') {
-        return { lat: p.lat, lon: p.lon };
-      }
+      const data = await res.json();
+      const top: Suggestion | undefined = data.suggestions?.[0];
+      if (!top) return null;
+      const details = await fetchPlaceDetails(top.placeId);
+      if (details?.exact) return { lat: details.lat, lon: details.lon };
     } catch {}
 
     return null;
@@ -264,11 +287,11 @@ export default function OrderCreationForm({
     debounceRef.current = setTimeout(() => fetchSuggestions(street), DEBOUNCE_MS);
   };
 
-  const selectSuggestion = (s: Suggestion) => {
-    const hasCoords = s.lat != null && s.lon != null;
-    const basePoint = hasCoords ? { lat: s.lat!, lon: s.lon! } : null;
-    baseDestRef.current = basePoint;
-    setDest(basePoint);
+  // Async: η Google δεν δίνει συντεταγμένες μέσα στις προτάσεις (βλ. Suggestion
+  // type) — χρειάζεται ένα Place Details call πριν έχουμε σημείο. Το κείμενο της
+  // διεύθυνσης μπαίνει ΑΜΕΣΩΣ (καμία καθυστέρηση στο UI), το σημείο έρχεται λίγο
+  // αργότερα και ενημερώνει το dest όταν φτάσει.
+  const selectSuggestion = async (s: Suggestion) => {
     setSuggestions([]);
     setShowSuggestions(false);
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -281,6 +304,11 @@ export default function OrderCreationForm({
     if (s.isPlace) {
       const label = s.streetName ? `${s.street}, ${s.streetName}` : s.street;
       setAddress(label);
+      const details = await fetchPlaceDetails(s.placeId);
+      const hasCoords = !!details;
+      const basePoint = details ? { lat: details.lat, lon: details.lon } : null;
+      baseDestRef.current = basePoint;
+      setDest(basePoint);
       setDestExact(hasCoords);
       // Κρατάμε ΟΛΟ το κείμενο ως «δρόμο»: έτσι το onAddressChange το αναγνωρίζει
       // και δεν σβήνει τις συντεταγμένες αν ο χρήστης προσθέσει κάτι (π.χ. όροφο).
@@ -296,6 +324,11 @@ export default function OrderCreationForm({
     setAddress(number ? `${s.street} ${number}` : `${s.street} `);
     // Η πρόταση είναι σημείο ΔΡΟΜΟΥ· γίνεται ακριβής μόνο αν λυθεί ο αριθμός.
     setDestExact(false);
+    const details = await fetchPlaceDetails(s.placeId);
+    const hasCoords = !!details;
+    const basePoint = details ? { lat: details.lat, lon: details.lon } : null;
+    baseDestRef.current = basePoint;
+    setDest(basePoint);
     // Θυμόμαστε τον δρόμο ώστε το επόμενο onChange (π.χ. πληκτρολόγηση αριθμού)
     // να ξέρει ότι οι συντεταγμένες εξακολουθούν να ισχύουν.
     destStreetRef.current = hasCoords ? s.street : null;
@@ -652,9 +685,9 @@ export default function OrderCreationForm({
             της παραγγελίας. Ζει αποκλειστικά στον AddressPicker, όπου υπάρχει
             ολόκληρη οθόνη γι' αυτό (λίστα, ονομασία, διαγραφή, πινέζα χάρτη). */}
 
-        {/* Attribution (απαίτηση δωρεάν πλάνου Geoapify) */}
+        {/* Attribution (απαιτεί η Google όταν εμφανίζονται τα δεδομένα της χωρίς το δικό της UI widget) */}
         <p className="mb-4 text-[10px]" style={{ color: 'var(--text-muted)' }}>
-          Προτάσεις διευθύνσεων: Geoapify · OpenStreetMap
+          Προτάσεις διευθύνσεων: Google
         </p>
 
         {/* Payment Method */}
