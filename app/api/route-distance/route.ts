@@ -67,6 +67,10 @@ export async function GET(req: NextRequest) {
   url.searchParams.set('waypoints', `${from.lat},${from.lon}|${to.lat},${to.lon}`);
   url.searchParams.set('mode', MODE);
   url.searchParams.set('units', 'metric'); // → properties.distance σε ΜΕΤΡΑ
+  // type=short: βελτιστοποίηση με βάση την απόσταση, όχι το default 'balanced'
+  // (χρόνος+κόστος+απόσταση) — έτσι η χρέωση βασίζεται πάντα στη συντομότερη
+  // διαδρομή αντί σε έναν πιθανά μεγαλύτερο "καλύτερο" δρόμο.
+  url.searchParams.set('type', 'short');
   url.searchParams.set('apiKey', apiKey);
 
   try {
