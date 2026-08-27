@@ -8,6 +8,7 @@ import 'leaflet/dist/leaflet.css';
 // Το Carto (basemaps.cartocdn.com) σταμάτησε να σερβίρει tiles χωρίς λογαριασμό
 // και επέστρεφε εικόνες με το κείμενο "API key required" πάνω στον χάρτη.
 const TILE_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+const ROADS_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}';
 const LABELS_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}';
 
 type LatLng = { lat: number; lon: number };
@@ -74,6 +75,7 @@ export default function AddressPickerMap({ center, origin, pin, onPick }: Props)
           url={TILE_URL}
           maxZoom={19}
         />
+        <TileLayer url={ROADS_URL} maxZoom={19} />
         <TileLayer url={LABELS_URL} maxZoom={19} />
         <ClickHandler onPick={onPick} />
 
