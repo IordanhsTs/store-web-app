@@ -7,7 +7,7 @@ import { Clock, Map as MapIcon, XCircle, User, MessageSquare, Package, Phone, Ro
 import { differenceInMinutes } from 'date-fns';
 import { toast } from 'sonner';
 import DriverMapInline from './DriverMapInline';
-import { supabase, isReadOnly } from './lib/supabase';
+import { supabase } from './lib/supabase';
 import { confirmDialog } from './ConfirmDialog';
 import { formatKm, formatEuro } from './lib/distance';
 
@@ -23,8 +23,6 @@ export default function ActiveOrdersList({ storeId }: { storeId: string }) {
   const { orders, loading } = useActiveOrders(storeId);
   const [now, setNow] = useState(new Date());
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
-  // READ-ONLY-ON-FAILOVER: σε standby δεν επιτρέπουμε ακύρωση παραγγελίας.
-  const [readOnly, setReadOnly] = useState(false);
 
   const hasScheduled = orders.some((o) => o.status === 'scheduled');
 
@@ -35,15 +33,7 @@ export default function ActiveOrdersList({ storeId }: { storeId: string }) {
     return () => clearInterval(interval);
   }, [hasScheduled]);
 
-  useEffect(() => {
-    setReadOnly(isReadOnly());
-  }, []);
-
   const handleCancel = async (orderId: string) => {
-    if (readOnly) {
-      toast.error('Εφεδρική λειτουργία — προσωρινά μόνο ανάγνωση.');
-      return;
-    }
     const confirmed = await confirmDialog('Είστε σίγουροι ότι θέλετε να ακυρώσετε την παραγγελία;', { danger: true, confirmLabel: 'Ακύρωση παραγγελίας' });
     if (!confirmed) return;
     const { error } = await supabase.from('orders').update({ status: 'cancelled' }).eq('id', orderId);
@@ -276,14 +266,11 @@ export default function ActiveOrdersList({ storeId }: { storeId: string }) {
                       </span>
                       <button
                         onClick={() => handleCancel(order.id)}
-                        disabled={readOnly}
-                        title={readOnly ? 'Προσωρινά μη διαθέσιμο — εφεδρική λειτουργία' : undefined}
                         className="flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-lg transition-all duration-150 shrink-0"
                         style={{
                           color: 'var(--danger)',
                           backgroundColor: 'transparent',
-                          opacity: readOnly ? 0.4 : 1,
-                          cursor: readOnly ? 'not-allowed' : 'pointer',
+                          cursor: 'pointer',
                         }}
                       >
                         <XCircle className="w-4 h-4" />
@@ -300,17 +287,14 @@ export default function ActiveOrdersList({ storeId }: { storeId: string }) {
                       </span>
                       <button
                         onClick={() => handleCancel(order.id)}
-                        disabled={readOnly}
-                        title={readOnly ? 'Προσωρινά μη διαθέσιμο — εφεδρική λειτουργία' : undefined}
                         className="flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-lg transition-all duration-150"
                         style={{
                           color: 'var(--danger)',
                           backgroundColor: 'transparent',
-                          opacity: readOnly ? 0.4 : 1,
-                          cursor: readOnly ? 'not-allowed' : 'pointer',
+                          cursor: 'pointer',
                         }}
                         onMouseEnter={e => {
-                          if (!readOnly) (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'var(--danger-bg)';
+                          (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'var(--danger-bg)';
                         }}
                         onMouseLeave={e => {
                           (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'transparent';

@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Send, X, MessageSquare } from 'lucide-react';
 import { toast } from 'sonner';
-import { supabase, isReadOnly } from './lib/supabase';
+import { supabase } from './lib/supabase';
 
 // ── Μήνυμα καταστήματος → διαχειριστή ────────────────────────────────────────
 // Γράφεται σε ΠΙΝΑΚΑ (store_messages) και όχι σε realtime broadcast όπως τα
@@ -32,11 +32,6 @@ export default function ContactAdminModal({
       toast.error('Γράψτε το μήνυμά σας πρώτα.');
       return;
     }
-    if (isReadOnly()) {
-      toast.error('Εφεδρική λειτουργία — προσωρινά μόνο ανάγνωση.');
-      return;
-    }
-
     setSending(true);
     const { error } = await supabase.from('store_messages').insert({
       store_id: storeId,

@@ -7,7 +7,7 @@ import Navbar from '../Navbar';
 import OrderCreationForm from '../OrderCreationForm';
 import ActiveOrdersList from '../ActiveOrdersList';
 import SystemAlertListener from '../SystemAlertListener';
-import ReadOnlyBanner from '../ReadOnlyBanner';
+import BackupModeBanner from '../BackupModeBanner';
 
 export default async function DashboardPage() {
   const cookieStore = await cookies();
@@ -124,7 +124,7 @@ export default async function DashboardPage() {
     <div className="min-h-screen" style={{ backgroundColor: 'var(--bg-primary)' }}>
       <SystemAlertListener storeId={store.id} />
       <Navbar storeId={store.id} storeName={store.name || 'Άγνωστο Κατάστημα'} />
-      <ReadOnlyBanner />
+      <BackupModeBanner />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
         {/* Order creation panel */}

@@ -2,19 +2,22 @@
 
 import { useEffect, useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
-import { isReadOnly } from './lib/supabase';
+import { isBackupMode } from './lib/supabase';
 
-// READ-ONLY-ON-FAILOVER: όταν το σύστημα τρέχει στο εφεδρικό datacenter (standby),
-// οι νέες εγγραφές είναι προσωρινά κλειστές ώστε να μην αποκλίνουν τα δεδομένα.
+// Ενημερωτική μπάρα όταν το σύστημα τρέχει στο εφεδρικό datacenter (standby).
+//
+// ΔΕΝ σημαίνει περιορισμό: το εφεδρικό δέχεται ΟΛΕΣ τις λειτουργίες (νέες
+// παραγγελίες, μηνύματα, τα πάντα), ακριβώς όπως το κύριο. Υπάρχει για να ξέρει
+// το κατάστημα ότι το κύριο σύστημα έχει προσωρινό πρόβλημα.
 // Ελέγχουμε μετά το mount (το ενεργό backend έρχεται από localStorage), όπως το chip.
-export default function ReadOnlyBanner() {
-  const [readOnly, setReadOnly] = useState(false);
+export default function BackupModeBanner() {
+  const [backupMode, setBackupMode] = useState(false);
 
   useEffect(() => {
-    setReadOnly(isReadOnly());
+    setBackupMode(isBackupMode());
   }, []);
 
-  if (!readOnly) return null;
+  if (!backupMode) return null;
 
   return (
     <div
@@ -28,8 +31,8 @@ export default function ReadOnlyBanner() {
     >
       <AlertTriangle className="w-4 h-4 shrink-0" />
       <span>
-        Εφεδρική λειτουργία — προσωρινά <strong>μόνο ανάγνωση</strong>. Οι νέες
-        παραγγελίες θα είναι διαθέσιμες μόλις αποκατασταθεί το κύριο σύστημα.
+        Τρέχουμε στο <strong>εφεδρικό σύστημα</strong>. Οι παραγγελίες περνάνε
+        κανονικά — τα δεδομένα επιστρέφουν στο κύριο στις 02:00.
       </span>
     </div>
   );

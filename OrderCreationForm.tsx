@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { Banknote, CreditCard, MapPin, Send, Lock, Clock, Route, AlertTriangle, BookMarked } from 'lucide-react';
+import { Banknote, CreditCard, MapPin, Send, Clock, Route, AlertTriangle, BookMarked } from 'lucide-react';
 import { toast } from 'sonner';
-import { supabase, isReadOnly } from './lib/supabase';
+import { supabase } from './lib/supabase';
 import { confirmDialog } from './ConfirmDialog';
 import { useStoreOrigin } from './useStoreOrigin';
 import { useRoadDistance } from './useRoadDistance';
@@ -83,8 +83,6 @@ export default function OrderCreationForm({
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card'>('cash');
   const [comments, setComments] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  // READ-ONLY-ON-FAILOVER: σε standby κλείνουμε τη δημιουργία παραγγελίας (μετά το mount).
-  const [readOnly, setReadOnly] = useState(false);
 
   // ── Συντεταγμένες προορισμού (από την επιλεγμένη πρόταση ή αποθηκευμένη διεύθυνση) ──
   const [dest, setDest] = useState<{ lat: number; lon: number } | null>(null);
@@ -142,10 +140,6 @@ export default function OrderCreationForm({
     if (overrideDebounceRef.current) clearTimeout(overrideDebounceRef.current);
     if (streetPointTimerRef.current) clearTimeout(streetPointTimerRef.current);
     abortRef.current?.abort();
-  }, []);
-
-  useEffect(() => {
-    setReadOnly(isReadOnly());
   }, []);
 
   // Φόρτωση αποθηκευμένων διευθύνσεων του καταστήματος
@@ -465,10 +459,6 @@ export default function OrderCreationForm({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (readOnly) {
-      toast.error('Εφεδρική λειτουργία — προσωρινά μόνο ανάγνωση. Δοκιμάστε ξανά μόλις αποκατασταθεί το κύριο σύστημα.');
-      return;
-    }
     const fullAddress = address.trim();
     if (!fullAddress) {
       toast.error('Παρακαλώ εισάγετε διεύθυνση παράδοσης.');
@@ -939,42 +929,31 @@ export default function OrderCreationForm({
         {/* Submit */}
         <button
           type="submit"
-          disabled={isSubmitting || readOnly || tooFar}
-          title={
-            readOnly
-              ? 'Προσωρινά μη διαθέσιμο — εφεδρική λειτουργία (μόνο ανάγνωση)'
-              : tooFar
-              ? `Πάνω από το όριο των ${MAX_DISTANCE_KM} χλμ`
-              : undefined
-          }
+          disabled={isSubmitting || tooFar}
+          title={tooFar ? `Πάνω από το όριο των ${MAX_DISTANCE_KM} χλμ` : undefined}
           className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold text-white transition-all duration-200"
           style={{
-            background: readOnly || tooFar
+            background: tooFar
               ? 'var(--text-muted)'
               : isSubmitting
               ? 'var(--accent-hover)'
               : 'linear-gradient(135deg, var(--accent), var(--accent-hover))',
-            boxShadow: isSubmitting || readOnly || tooFar ? 'none' : '0 4px 16px var(--accent-muted)',
-            opacity: isSubmitting || readOnly || tooFar ? 0.75 : 1,
-            cursor: isSubmitting || readOnly || tooFar ? 'not-allowed' : 'pointer',
+            boxShadow: isSubmitting || tooFar ? 'none' : '0 4px 16px var(--accent-muted)',
+            opacity: isSubmitting || tooFar ? 0.75 : 1,
+            cursor: isSubmitting || tooFar ? 'not-allowed' : 'pointer',
           }}
           onMouseEnter={e => {
-            if (!isSubmitting && !readOnly && !tooFar) {
+            if (!isSubmitting && !tooFar) {
               (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-1px)';
               (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 8px 24px var(--accent-muted)';
             }
           }}
           onMouseLeave={e => {
             (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(0)';
-            (e.currentTarget as HTMLButtonElement).style.boxShadow = isSubmitting || readOnly || tooFar ? 'none' : '0 4px 16px var(--accent-muted)';
+            (e.currentTarget as HTMLButtonElement).style.boxShadow = isSubmitting || tooFar ? 'none' : '0 4px 16px var(--accent-muted)';
           }}
         >
-          {readOnly ? (
-            <>
-              <Lock className="w-4 h-4" />
-              Προσωρινά μη διαθέσιμο
-            </>
-          ) : tooFar ? (
+          {tooFar ? (
             <>
               <AlertTriangle className="w-4 h-4" />
               Εκτός ορίου {MAX_DISTANCE_KM} χλμ
