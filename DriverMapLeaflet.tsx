@@ -4,9 +4,10 @@ import { MapContainer, TileLayer, Marker, Tooltip } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
-// Δωρεάν tiles (Carto) — ίδιο σχήμα με τον admin (delivery-admin/src/LiveMap.jsx).
-// Ίδιος χάρτης σε light και dark theme (client feedback 09/08) — δεν εναλλάσσουμε πια σε dark_all.
-const TILE_URL = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png';
+// Δορυφορική εικόνα εδάφους (Esri World Imagery) — δωρεάν, χωρίς API key.
+// Το Carto (basemaps.cartocdn.com) σταμάτησε να σερβίρει tiles χωρίς λογαριασμό
+// και επέστρεφε εικόνες με το κείμενο "API key required" πάνω στον χάρτη.
+const TILE_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
 
 interface Props {
   lat: number;
@@ -54,8 +55,13 @@ export default function DriverMapLeaflet({ lat, lng, driverName = 'Διανομ�
         style={{ background: '#f8f5f0' }}
       >
         <TileLayer
-          attribution='&copy; <a href="https://carto.com/">Carto</a> · OpenStreetMap'
+          attribution='&copy; Esri, Maxar, Earthstar Geographics, GIS User Community'
           url={TILE_URL}
+          maxZoom={19}
+        />
+        <TileLayer
+          url="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"
+          maxZoom={19}
         />
         <Marker position={[lat, lng]} icon={icon}>
           <Tooltip direction="top" offset={[0, -22]} permanent className="vertex-map-tt">

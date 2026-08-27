@@ -4,9 +4,11 @@ import { MapContainer, TileLayer, Marker, Tooltip, useMapEvents } from 'react-le
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
-// Ίδια δωρεάν tiles με τον υπόλοιπο στόλο χαρτών (admin LiveMap, DriverMapLeaflet).
-// Ίδιος χάρτης σε light και dark theme (client feedback 09/08) — δεν εναλλάσσουμε πια σε dark_all.
-const TILE_URL = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png';
+// Δορυφορική εικόνα εδάφους (Esri World Imagery) — δωρεάν, χωρίς API key.
+// Το Carto (basemaps.cartocdn.com) σταμάτησε να σερβίρει tiles χωρίς λογαριασμό
+// και επέστρεφε εικόνες με το κείμενο "API key required" πάνω στον χάρτη.
+const TILE_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+const LABELS_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}';
 
 type LatLng = { lat: number; lon: number };
 
@@ -68,9 +70,11 @@ export default function AddressPickerMap({ center, origin, pin, onPick }: Props)
         style={{ background: '#f8f5f0' }}
       >
         <TileLayer
-          attribution='&copy; <a href="https://carto.com/">Carto</a> · OpenStreetMap'
+          attribution='&copy; Esri, Maxar, Earthstar Geographics, GIS User Community'
           url={TILE_URL}
+          maxZoom={19}
         />
+        <TileLayer url={LABELS_URL} maxZoom={19} />
         <ClickHandler onPick={onPick} />
 
         {/* Το κατάστημα: σημείο αναφοράς για την απόσταση */}
