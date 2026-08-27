@@ -58,16 +58,6 @@ export function getTenantSchema(): string {
   return tenantSchema || 'public';
 }
 
-// Τρέχουμε στο εφεδρικό backend; Χρησιμεύει ΜΟΝΟ για ενημερωτική ένδειξη.
-//
-// ΤΙ ΑΛΛΑΞΕ (27/08/2026): παλιότερα λεγόταν isReadOnly() και σήμαινε ότι το
-// κατάστημα δεν μπορούσε να περάσει παραγγελία σε βλάβη. Πλέον το standby έχει
-// τα ίδια δικαιώματα με το primary και τα δεδομένα γυρνάνε πίσω αυτόματα στις
-// 02:00. Η μετάβαση κάνει reload, οπότε η τιμή είναι σταθερή ανά φόρτωση σελίδας.
-export function isBackupMode(): boolean {
-  return getActiveBackend()?.name === 'standby';
-}
-
 // Διαβάζει το `tenant` claim από το JWT, το αποθηκεύει, και κάνει reload αν άλλαξε
 // (ώστε ο client να ξαναστηθεί με το σωστό schema). Ίδιο μοτίβο με το failover reload.
 export function applyTenantFromSession(session: { access_token?: string } | null) {
