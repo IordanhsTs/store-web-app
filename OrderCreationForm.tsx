@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { Banknote, CreditCard, MapPin, Send, Clock, BookMarked } from 'lucide-react';
+import { Banknote, CreditCard, MapPin, Send, Clock, BookMarked, CircleCheck, TriangleAlert } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from './lib/supabase';
 import { confirmDialog } from './ConfirmDialog';
@@ -107,6 +107,15 @@ export default function OrderCreationForm({
   // Το τίμημα: η απόσταση δεν φαίνεται πια όσο γράφεται η διεύθυνση — φαίνεται
   // στον διάλογο χρέωσης και στο μήνυμα επιτυχίας.
   const pendingRef = useRef<Pending | null>(null);
+  // Καθρέφτης του pendingRef για το UI: «έχει η διεύθυνση σημείο στον χάρτη;».
+  // Χρειάζεται ξεχωριστό state γιατί το ref δεν προκαλεί render — και από αυτό
+  // κρέμεται ΟΛΗ η ένδειξη επιβεβαίωσης δίπλα στο πεδίο. Δεν κοστίζει τίποτα:
+  // δείχνει τι διάλεξε ο χρήστης, όχι τι απάντησε η Google.
+  const [confirmed, setConfirmed] = useState(false);
+  const setPending = useCallback((p: Pending | null) => {
+    pendingRef.current = p;
+    setConfirmed(p !== null);
+  }, []);
   // Το αποτέλεσμα της ΤΕΛΕΥΤΑΙΑΣ ανάλυσης, κλειδωμένο στο ακριβές κείμενο της
   // διεύθυνσης. Χωρίς αυτό, ένα «Ακύρωση» στον διάλογο επιπλέον χρέωσης και ένα
   // δεύτερο πάτημα «Αποστολή» θα ξανάκανε ΚΑΙ ΤΙΣ ΔΥΟ κλήσεις. Κρατάμε και τη
@@ -302,6 +311,14 @@ export default function OrderCreationForm({
           ? await resolveNumberPoint(p.street, number)
           // Χωρίς αριθμό (χωριό, πλατεία): το σημείο του ίδιου του δρόμου.
           : await fetchPlaceDetails(p.placeId);
+
+        // ΔΙΧΤΥ ΑΣΦΑΛΕΙΑΣ: ο δρόμος ΕΧΕΙ επιλεγεί από τη λίστα, άρα ξέρουμε
+        // σίγουρα ένα σημείο γι' αυτόν — δεν επιτρέπεται μια αποτυχία στην
+        // αναζήτηση του ΑΡΙΘΜΟΥ να αφήσει την παραγγελία χωρίς συντεταγμένες
+        // (και πλέον να την μπλοκάρει κιόλας, βλ. handleSubmit). Πέφτουμε στο
+        // σημείο της οδού, όπως ακριβώς και όταν δεν γράφτηκε καθόλου αριθμός.
+        // Κοστίζει ένα δεύτερο Place Details μόνο σε αυτή τη σπάνια περίπτωση.
+        if (!point) point = await fetchPlaceDetails(p.placeId);
       }
     }
 
@@ -320,7 +337,7 @@ export default function OrderCreationForm({
     // Άλλαξε ο δρόμος → η επιλογή δεν ισχύει πια. Καμία κλήση εδώ: ούτε για να
     // ακυρωθεί κάτι, ούτε για να ζητηθεί κάτι νέο.
     if (pendingRef.current && !stillMatches(pendingRef.current, value)) {
-      pendingRef.current = null;
+      setPending(null);
     }
     // Η ανάλυση είναι κλειδωμένη σε ΑΚΡΙΒΕΣ κείμενο· μόλις αυτό αλλάξει (π.χ.
     // διορθώθηκε ο αριθμός), το προηγούμενο σημείο δεν ισχύει.
@@ -371,7 +388,7 @@ export default function OrderCreationForm({
     if (s.isPlace) {
       const label = s.streetName ? `${s.street}, ${s.streetName}` : s.street;
       setAddress(label);
-      pendingRef.current = { kind: 'place', label, placeId: s.placeId };
+      setPending({ kind: 'place', label, placeId: s.placeId });
       return;
     }
 
@@ -379,7 +396,7 @@ export default function OrderCreationForm({
     // Κρατάμε τον αριθμό που είχε ήδη γράψει ο χρήστης — ένα πεδίο, μία κίνηση.
     const { number } = splitAddress(address);
     setAddress(number ? `${s.street} ${number}` : `${s.street} `);
-    pendingRef.current = { kind: 'street', street: s.street, placeId: s.placeId };
+    setPending({ kind: 'street', street: s.street, placeId: s.placeId });
   };
 
   // Εφαρμογή διεύθυνσης από τον επιλογέα — είτε αποθηκευμένη, είτε πινέζα χάρτη.
@@ -390,10 +407,11 @@ export default function OrderCreationForm({
     resolvedRef.current = null;
     // Το σημείο το όρισε ΑΝΘΡΩΠΟΣ, άρα είναι ό,τι ακριβέστερο έχουμε — και δεν
     // κοστίζει τίποτα στην αποστολή, γιατί δεν χρειάζεται καμία κλήση.
-    pendingRef.current =
+    setPending(
       a.lat != null && a.lon != null
         ? { kind: 'picked', street: splitAddress(a.address).street, lat: a.lat, lon: a.lon }
-        : null;
+        : null
+    );
     setSuggestions([]);
     setShowSuggestions(false);
   };
@@ -428,6 +446,28 @@ export default function OrderCreationForm({
       }
     }
 
+    // ── Η ΔΙΕΥΘΥΝΣΗ ΠΡΕΠΕΙ ΝΑ ΕΧΕΙ ΣΗΜΕΙΟ ΣΤΟΝ ΧΑΡΤΗ (αίτημα διαχειριστή) ──────
+    // Μέχρι τώρα η φόρμα ήταν fail-open: ελεύθερο κείμενο περνούσε ως παραγγελία
+    // χωρίς συντεταγμένες. Στην πράξη αυτό ήταν οι ΜΙΣΕΣ παραγγελίες (54 στις 110
+    // τον Αύγουστο 2026) — ο διανομέας δεν είχε πού να πλοηγηθεί και η απόσταση
+    // δεν χρεωνόταν ποτέ. Πλέον κόβεται εδώ.
+    //
+    // Ο έλεγχος είναι ΤΖΑΜΠΑ και μπαίνει ΠΡΙΝ από κάθε πληρωμένη κλήση: κοιτάζει
+    // μόνο τι διάλεξε ο χρήστης. Χωρίς επιλογή από τη λίστα / τον χάρτη /
+    // αποθηκευμένη, δεν υπάρχει περίπτωση να προκύψει σημείο — άρα δεν έχει
+    // κανένα νόημα να ρωτήσουμε τη Google.
+    const picked = pendingRef.current;
+    if (!picked || !stillMatches(picked, fullAddress)) {
+      toast.error(
+        'Η διεύθυνση δεν έχει επιβεβαιωθεί στον χάρτη. Διαλέξτε μία από τις προτάσεις ' +
+        'που εμφανίζονται καθώς γράφετε, ή χρησιμοποιήστε τον χάρτη/τις αποθηκευμένες ' +
+        'διευθύνσεις. Αν δεν ξέρετε ακριβή διεύθυνση, γράψτε «Φλώρινα», διαλέξτε την ' +
+        'από τη λίστα και βάλτε τα στοιχεία του πελάτη στα Σχόλια.',
+        { duration: 10000 }
+      );
+      return;
+    }
+
     // ── ΕΔΩ, ΚΑΙ ΜΟΝΟ ΕΔΩ, ΞΟΔΕΥΟΥΜΕ ──────────────────────────────────────────
     // Μία ανάλυση σημείου (Google) + μία μέτρηση διαδρομής (Geoapify) ανά
     // παραγγελία, ό,τι κι αν πληκτρολογήθηκε πριν και με όποια σειρά. Και τα δύο
@@ -437,6 +477,27 @@ export default function OrderCreationForm({
     const { point, distance } = await resolveAndMeasure(fullAddress);
     const distanceKm = distance.km;
     const surcharge = distanceKm !== null ? surchargeFor(distanceKm) : 0;
+
+    // ── Ο χρήστης έκανε τη δουλειά του, το σύστημα απέτυχε ────────────────────
+    // Εδώ φτάνουμε ΜΟΝΟ αν είχε επιλεγεί κανονικά διεύθυνση και παρ' όλα αυτά
+    // δεν γύρισε σημείο — δηλαδή πρόβλημα δικτύου ή της ίδιας της Google, όχι
+    // κακή χρήση. Σκληρό μπλοκ εδώ θα σήμαινε ότι μια βλάβη της Google σταματά
+    // ΚΑΘΕ παραγγελία σε ΚΑΘΕ κατάστημα — χειρότερο από το πρόβλημα που λύνουμε.
+    // Οπότε ρωτάμε ρητά: η παραγγελία μπορεί να φύγει, αλλά ως συνειδητή πράξη.
+    if (!point) {
+      setPhase('idle');
+      const ok = await confirmDialog(
+        'Δεν καταφέραμε να βρούμε το σημείο της διεύθυνσης στον χάρτη (πιθανό πρόβλημα ' +
+        'σύνδεσης). Αν σταλεί έτσι, ο διανομέας θα δει μόνο το κείμενο της διεύθυνσης, ' +
+        'χωρίς πλοήγηση, και δεν θα υπολογιστεί χρέωση απόστασης.',
+        {
+          title: 'Η διεύθυνση δεν βρέθηκε στον χάρτη',
+          confirmLabel: 'Αποστολή έτσι κι αλλιώς',
+          cancelLabel: 'Άκυρο, θα ξαναδοκιμάσω',
+        }
+      );
+      if (!ok) return;
+    }
 
     // ── Όριο 15 χλμ: σκληρό μπλοκ ──
     // Ισχύει ΜΟΝΟ όταν ξέρουμε πραγματικά την απόσταση. Αν λείπουν συντεταγμένες
@@ -505,7 +566,7 @@ export default function OrderCreationForm({
       setAddress('');
       setComments('');
       setPaymentMethod('cash');
-      pendingRef.current = null;
+      setPending(null);
       resolvedRef.current = null;
       setDelayMinutes(0);
       setCustomDelay('');
@@ -585,7 +646,10 @@ export default function OrderCreationForm({
             <MapPin
               className="w-4 h-4 absolute"
               style={{
-                color: 'var(--text-muted)',
+                // Πράσινο = έχουμε σημείο στον χάρτη. Η ένδειξη ζει πάνω στο ίδιο
+                // το εικονίδιο του πεδίου ώστε να μη χρειάζεται δεύτερη γραμμή
+                // κειμένου όταν όλα πάνε καλά (βλ. και το μήνυμα από κάτω).
+                color: confirmed ? 'var(--success)' : 'var(--text-muted)',
                 left: '12px',
                 top: '20px',
                 transform: 'translateY(-50%)',
@@ -665,6 +729,30 @@ export default function OrderCreationForm({
             )}
           </div>
         </div>
+
+        {/* ── Κατάσταση διεύθυνσης ──
+            Η μόνη γραμμή που μπήκε ξανά κάτω από το πεδίο, και μόνο όταν έχει
+            γραφτεί κάτι: χωρίς αυτήν, ο υπάλληλος μαθαίνει ότι πρέπει να
+            διαλέξει από τη λίστα μόνο όταν του κοπεί η αποστολή. Δεν κοστίζει
+            καμία κλήση — δείχνει την επιλογή, όχι απάντηση της Google. */}
+        {address.trim() ? (
+          confirmed ? (
+            <p className="mt-1.5 text-[11px] flex items-start gap-1.5" style={{ color: 'var(--success)' }}>
+              <CircleCheck className="w-3 h-3 shrink-0 mt-[1px]" />
+              Η διεύθυνση επιβεβαιώθηκε στον χάρτη.
+            </p>
+          ) : (
+            <p className="mt-1.5 text-[11px] flex items-start gap-1.5" style={{ color: 'var(--warning)' }}>
+              <TriangleAlert className="w-3 h-3 shrink-0 mt-[1px]" />
+              <span>
+                Διαλέξτε τη διεύθυνση από τη λίστα προτάσεων (ή από τον χάρτη) — αλλιώς η
+                παραγγελία δεν μπορεί να σταλεί. Αν δεν ξέρετε ακριβή διεύθυνση, γράψτε
+                «Φλώρινα», διαλέξτε την από τη λίστα και βάλτε τα στοιχεία του πελάτη στα
+                Σχόλια.
+              </span>
+            </p>
+          )
+        ) : null}
 
         {/* Το ζωντανό badge απόστασης αφαιρέθηκε μαζί με τους ζωντανούς
             υπολογισμούς: κάθε φορά που εμφάνιζε αριθμό, κάποιος τον είχε
