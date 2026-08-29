@@ -328,6 +328,18 @@ export default function OrderCreationForm({
       resolvedRef.current = null;
     }
 
+    // Ο ΔΡΟΜΟΣ ΕΧΕΙ ΚΛΕΙΔΩΣΕΙ και ο χρήστης απλώς συμπληρώνει τον αριθμό.
+    // Χωρίς αυτό, κάθε ψηφίο ξανάνοιγε το dropdown προτείνοντας τον δρόμο που
+    // μόλις διάλεξε — και έπρεπε να πατήσει σε κενό σημείο για να το κλείσει.
+    // Το φιλτράρισμα γίνεται ούτως ή άλλως στο κομμάτι της οδού, οπότε η
+    // πρόταση ήταν πάντα η ίδια και πάντα άχρηστη.
+    if (pendingRef.current) {
+      abortRef.current?.abort();
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
     if (street.length < MIN_CHARS) {
       setSuggestions([]);
       setShowSuggestions(false);
@@ -346,6 +358,9 @@ export default function OrderCreationForm({
     setSuggestions([]);
     setShowSuggestions(false);
     if (debounceRef.current) clearTimeout(debounceRef.current);
+    // Μια αναζήτηση που έφυγε ΠΡΙΝ το κλικ προλαβαίνει να γυρίσει ΜΕΤΑ από
+    // αυτό και να ξανανοίξει το dropdown μόνη της. Την κόβουμε.
+    abortRef.current?.abort();
     resolvedRef.current = null;
 
     // ── ΚΑΤΑΣΤΗΜΑ (π.χ. «Coffee Train») ──
@@ -370,6 +385,8 @@ export default function OrderCreationForm({
   // Εφαρμογή διεύθυνσης από τον επιλογέα — είτε αποθηκευμένη, είτε πινέζα χάρτη.
   const applyPicked = (a: { address: string; lat: number | null; lon: number | null; alreadySaved: boolean }) => {
     setAddress(a.address);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    abortRef.current?.abort();
     resolvedRef.current = null;
     // Το σημείο το όρισε ΑΝΘΡΩΠΟΣ, άρα είναι ό,τι ακριβέστερο έχουμε — και δεν
     // κοστίζει τίποτα στην αποστολή, γιατί δεν χρειάζεται καμία κλήση.
