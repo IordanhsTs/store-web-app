@@ -1,12 +1,12 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { Banknote, CreditCard, MapPin, Send, Clock, Route, AlertTriangle, BookMarked } from 'lucide-react';
+import { Banknote, CreditCard, MapPin, Send, Clock, BookMarked } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from './lib/supabase';
 import { confirmDialog } from './ConfirmDialog';
 import { useStoreOrigin } from './useStoreOrigin';
-import { useRoadDistance } from './useRoadDistance';
+import { measureRoadDistance, type RoadDistance } from './lib/road-distance';
 import AddressPicker, { type SavedAddress } from './AddressPicker';
 import {
   surchargeFor,
@@ -28,18 +28,26 @@ type Suggestion = {
   streetName?: string;
 };
 
+/** Σημείο προορισμού. `exact` = ξέρουμε το κτίριο, όχι απλώς τον δρόμο. */
+type DestPoint = { lat: number; lon: number; exact: boolean };
+
+/**
+ * Ό,τι ξέρουμε για τον προορισμό ΠΡΙΝ πληρώσουμε γι' αυτόν.
+ *
+ * Καθώς γράφει ο υπάλληλος δεν ζητάμε ΚΑΝΕΝΑ σημείο από τη Google — κρατάμε
+ * μόνο «τι διάλεξε». Η μετατροπή σε συντεταγμένες γίνεται μία φορά, στην
+ * αποστολή (βλ. resolveDestination).
+ */
+type Pending =
+  /** Το σημείο το όρισε άνθρωπος (αποθηκευμένη διεύθυνση ή πινέζα χάρτη) — τζάμπα. */
+  | { kind: 'picked'; street: string; lat: number; lon: number }
+  /** Επιλέχθηκε πρόταση ΟΔΟΥ· ο αριθμός μπορεί να γραφτεί (ή όχι) μετά. */
+  | { kind: 'street'; street: string; placeId: string }
+  /** Επιλέχθηκε ΚΑΤΑΣΤΗΜΑ (POI) — έχει δικό του ακριβές σημείο, δεν δέχεται αριθμό. */
+  | { kind: 'place'; label: string; placeId: string };
+
 const MIN_CHARS = 3;      // δεν ψάχνουμε πριν από τόσα γράμματα (όσα δέχεται και το API route)
 const DEBOUNCE_MS = 200;  // περιμένουμε να σταματήσει το πληκτρολόγιο
-// Πόσο περιμένουμε, μετά την επιλογή δρόμου, πριν ζητήσουμε ΧΡΕΩΣΙΜΑ το σημείο
-// του δρόμου από τη Google. Αν μέσα σε αυτό το διάστημα γραφτεί αριθμός, η κλήση
-// ακυρώνεται εντελώς (βλ. scheduleStreetPoint).
-//
-// Γιατί τόσο μεγάλο: ο υπάλληλος συχνά κοιτάζει το σημείωμα ή ρωτάει τον πελάτη
-// πριν γράψει τον αριθμό. Κάθε δευτερόλεπτο αναμονής εδώ γλιτώνει μια χρέωση.
-// Το τίμημα αφορά ΜΟΝΟ διευθύνσεις χωρίς αριθμό (χωριά): εκεί η απόσταση
-// εμφανίζεται τόσο αργότερα — και μόνο αν ο χρήστης δεν φύγει από το πεδίο,
-// γιατί το blur τη ζητά αμέσως (βλ. flushStreetPoint).
-const STREET_POINT_DELAY_MS = 3000;
 const MAX_SAVED = 10;     // όριο αποθηκευμένων διευθύνσεων ανά κατάστημα (απόφαση χρήστη)
 
 // Προεπιλογές καθυστέρησης αποστολής (λεπτά). 0 = άμεσα.
@@ -82,33 +90,34 @@ export default function OrderCreationForm({
   const [address, setAddress] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card'>('cash');
   const [comments, setComments] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  // 'measuring' = τρέχει η ΜΙΑ ανάλυση/μέτρηση της αποστολής, 'saving' = γράφουμε.
+  const [phase, setPhase] = useState<'idle' | 'measuring' | 'saving'>('idle');
+  const busy = phase !== 'idle';
 
-  // ── Συντεταγμένες προορισμού (από την επιλεγμένη πρόταση ή αποθηκευμένη διεύθυνση) ──
-  const [dest, setDest] = useState<{ lat: number; lon: number } | null>(null);
-  // Ξέρουμε το σημείο ΤΟΥ ΑΡΙΘΜΟΥ ή μόνο του δρόμου; Η Google το δηλώνει μέσω
-  // του type (street_address/premise vs route) — βλ. googlePlaceDetails στο
-  // lib/google-places.ts. Ένα σημείο-δρόμου σε δρόμο 2 χλμ σημαίνει έως 2 χλμ
-  // λάθος και έως 3,90 € λάθος χρέωση. Το κρατάμε ξεχωριστά ώστε να ΦΑΙΝΕΤΑΙ.
-  const [destExact, setDestExact] = useState(false);
-  // Ο δρόμος (χωρίς αριθμό) για τον οποίο ισχύουν οι τρέχουσες συντεταγμένες. Η
-  // ροή χρήσης είναι «διάλεξε δρόμο από το dropdown, ΜΕΤΑ πληκτρολόγησε αριθμό» —
-  // αν το onChange ακύρωνε τις συντεταγμένες σε ΚΑΘΕ πλήκτρο, θα χανόταν η
-  // απόσταση ακριβώς τη στιγμή που ο χρήστης προσθέτει τον αριθμό.
-  const destStreetRef = useRef<string | null>(null);
-  // Το «ακατέργαστο» σημείο της Google (κέντρο δρόμου) για τον τρέχοντα
-  // δρόμο — η βάση στην οποία επιστρέφουμε όταν ο αριθμός δεν ταιριάζει σε
-  // κανένα καταχωρημένο override (βλ. street_segments πιο κάτω).
-  const baseDestRef = useRef<{ lat: number; lon: number } | null>(null);
-  const overrideDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Το τρέχον σημείο προήλθε από ΚΑΤΑΣΤΗΜΑ (POI), όχι από οδό. Τότε είναι ήδη
-  // ακριβές και δεν δέχεται αριθμό — «Coffee Train 5» δεν σημαίνει τίποτα.
-  const destIsPlaceRef = useRef(false);
-  // Ο επιλεγμένος δρόμος, μέχρι να χρειαστεί πραγματικά το σημείο του. Βλ.
-  // scheduleStreetPoint: το κρατάμε ώστε να μπορούμε να ζητήσουμε το σημείο
-  // ΑΡΓΟΤΕΡΑ (ή ποτέ, αν ακολουθήσει αριθμός).
-  const pendingStreetPlaceIdRef = useRef<string | null>(null);
-  const streetPointTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // ── Ο ΥΠΟΛΟΓΙΣΜΟΣ ΓΙΝΕΤΑΙ ΜΟΝΟ ΣΤΗΝ ΑΠΟΣΤΟΛΗ ───────────────────────────────
+  // Παλιότερα το σημείο ζητιόταν ζωντανά, όσο γραφόταν η διεύθυνση, με ένα
+  // παράθυρο αναμονής 3 δευτερολέπτων ώστε ο αριθμός που ακολουθεί να ακυρώνει
+  // την κλήση για τον σκέτο δρόμο. Στην πράξη ο υπάλληλος αργεί συχνά πάνω από
+  // αυτό (κοιτάζει σημείωμα, ρωτάει τον πελάτη), οπότε πληρώναμε ΔΥΟ φορές την
+  // ίδια διεύθυνση: μία για το σημείο του δρόμου και μία για το σημείο του
+  // αριθμού — και δύο φορές το routing του Geoapify από πάνω.
+  //
+  // Τώρα, ό,τι κοστίζει γίνεται ΜΙΑ φορά, στο πάτημα της «Αποστολής». Ό,τι
+  // πληκτρολογείται πριν είναι δωρεάν (autocomplete μέσα στο ίδιο session token).
+  // Το τίμημα: η απόσταση δεν φαίνεται πια όσο γράφεται η διεύθυνση — φαίνεται
+  // στον διάλογο χρέωσης και στο μήνυμα επιτυχίας.
+  const pendingRef = useRef<Pending | null>(null);
+  // Το αποτέλεσμα της ΤΕΛΕΥΤΑΙΑΣ ανάλυσης, κλειδωμένο στο ακριβές κείμενο της
+  // διεύθυνσης. Χωρίς αυτό, ένα «Ακύρωση» στον διάλογο επιπλέον χρέωσης και ένα
+  // δεύτερο πάτημα «Αποστολή» θα ξανάκανε ΚΑΙ ΤΙΣ ΔΥΟ κλήσεις. Κρατάμε και τη
+  // μέτρηση διαδρομής, όχι μόνο το σημείο: το /api/route-distance έχει μεν δικό
+  // του cache 24ώρου (άρα δεν ξαναχρεώνει), αλλά το round-trip καθυστερεί την
+  // αποστολή χωρίς λόγο.
+  const resolvedRef = useRef<{
+    address: string;
+    point: DestPoint | null;
+    distance: RoadDistance;
+  } | null>(null);
 
   // ── Καθυστερημένη αποστολή ── (-1 = χειροκίνητα λεπτά, -2 = συγκεκριμένη ώρα ρολογιού σήμερα)
   const [delayMinutes, setDelayMinutes] = useState(0);
@@ -137,8 +146,6 @@ export default function OrderCreationForm({
 
   useEffect(() => () => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (overrideDebounceRef.current) clearTimeout(overrideDebounceRef.current);
-    if (streetPointTimerRef.current) clearTimeout(streetPointTimerRef.current);
     abortRef.current?.abort();
   }, []);
 
@@ -220,7 +227,7 @@ export default function OrderCreationForm({
   const resolveNumberPoint = async (
     street: string,
     numberStr: string
-  ): Promise<{ lat: number; lon: number; exact: boolean } | null> => {
+  ): Promise<DestPoint | null> => {
     const n = parseInt(numberStr, 10);
     if (!Number.isFinite(n)) return null;
 
@@ -252,57 +259,55 @@ export default function OrderCreationForm({
   };
 
   /**
-   * Εφαρμόζει το σημείο για «δρόμος + αριθμός». Το σημείο-fallback του δρόμου
-   * έρχεται από την ΙΔΙΑ κλήση (exact=false), οπότε το κρατάμε στο baseDestRef
-   * για την περίπτωση που ο χρήστης σβήσει τον αριθμό.
+   * Ισχύει ακόμα η επιλογή που κρατάμε, για το κείμενο που βλέπουμε τώρα;
+   *
+   * Ο κανόνας δεν είναι «άλλαξε το κείμενο» αλλά «άλλαξε ο ΔΡΟΜΟΣ»: η ροή
+   * χρήσης είναι «διάλεξε δρόμο από το dropdown, ΜΕΤΑ πληκτρολόγησε αριθμό»,
+   * οπότε ο αριθμός δεν πρέπει να ακυρώνει την επιλογή.
    */
-  const applyNumberPoint = async (streetForLookup: string, numberStr: string) => {
-    const res = await resolveNumberPoint(streetForLookup, numberStr);
-    // Άλλαξε ο δρόμος όσο περιμέναμε → η απάντηση δεν μας αφορά πια.
-    if (destStreetRef.current !== streetForLookup) return;
-    if (!res) return;
-    setDest({ lat: res.lat, lon: res.lon });
-    setDestExact(res.exact);
-    if (!res.exact) baseDestRef.current = { lat: res.lat, lon: res.lon };
-  };
-
-  /** Το σημείο ΤΟΥ ΔΡΟΜΟΥ (χωρίς αριθμό) — μία χρεώσιμη κλήση. */
-  const fetchStreetPoint = async (streetForLookup: string, placeId: string) => {
-    const details = await fetchPlaceDetails(placeId);
-    if (destStreetRef.current !== streetForLookup) return;
-    const point = details ? { lat: details.lat, lon: details.lon } : null;
-    baseDestRef.current = point;
-    setDest(point);
-    setDestExact(false);
+  const stillMatches = (p: Pending, value: string): boolean => {
+    // Κατάστημα (POI): κρατάμε ΟΛΟ το κείμενο ως ταυτότητα, ώστε μια προσθήκη
+    // (π.χ. «, 2ος όροφος») να μη σβήνει την επιλογή.
+    if (p.kind === 'place') return norm(value).startsWith(norm(p.label));
+    return norm(splitAddress(value).street) === norm(p.street);
   };
 
   /**
-   * Βάζει σε ΑΝΑΜΟΝΗ το αίτημα για το σημείο του δρόμου.
+   * Μετατρέπει την επιλογή του χρήστη σε συντεταγμένες ΚΑΙ μετράει τη διαδρομή.
+   * ΕΔΩ ΞΟΔΕΥΟΥΜΕ — και μόνο εδώ. Καλείται μία φορά ανά αποστολή, με το
+   * αποτέλεσμα κλειδωμένο στο κείμενο της διεύθυνσης ώστε ένα δεύτερο πάτημα
+   * (π.χ. μετά από «Ακύρωση» στον διάλογο χρέωσης) να μην ξαναξοδεύει.
    *
-   * ΚΟΣΤΟΣ (μετρημένο 17/08/2026): σχεδόν πάντα ο χρήστης γράφει αριθμό αμέσως
-   * μετά την επιλογή δρόμου. Όταν ζητούσαμε το σημείο του δρόμου αμέσως, το
-   * πληρώναμε και το πετούσαμε ένα δευτερόλεπτο αργότερα — 2 χρεώσιμες κλήσεις
-   * ανά διεύθυνση αντί για 1 (≈92€/μήνα αντί για ≈23€ στις 15.000 διευθύνσεις).
-   * Με την αναμονή, η κλήση γίνεται ΜΟΝΟ όταν δεν ακολουθεί αριθμός.
+   * Fail-open παντού: χωρίς σημείο η παραγγελία περνά αχρέωτη — καλύτερα από
+   * μπλοκαρισμένο μαγαζί.
    */
-  const scheduleStreetPoint = (streetForLookup: string) => {
-    if (streetPointTimerRef.current) clearTimeout(streetPointTimerRef.current);
-    const placeId = pendingStreetPlaceIdRef.current;
-    if (!placeId) return;
-    streetPointTimerRef.current = setTimeout(
-      () => fetchStreetPoint(streetForLookup, placeId),
-      STREET_POINT_DELAY_MS
-    );
-  };
+  const resolveAndMeasure = async (
+    fullAddress: string
+  ): Promise<{ point: DestPoint | null; distance: RoadDistance }> => {
+    const cached = resolvedRef.current;
+    if (cached && cached.address === fullAddress) return cached;
 
-  /** Ο χρήστης έφυγε από το πεδίο: ό,τι περίμενε, το ζητάμε τώρα. */
-  const flushStreetPoint = () => {
-    if (!streetPointTimerRef.current) return;
-    clearTimeout(streetPointTimerRef.current);
-    streetPointTimerRef.current = null;
-    const placeId = pendingStreetPlaceIdRef.current;
-    const street = destStreetRef.current;
-    if (placeId && street) fetchStreetPoint(street, placeId);
+    const p = pendingRef.current;
+    let point: DestPoint | null = null;
+
+    if (p && stillMatches(p, fullAddress)) {
+      if (p.kind === 'picked') {
+        // Το όρισε άνθρωπος: ό,τι ακριβέστερο έχουμε, και δωρεάν.
+        point = { lat: p.lat, lon: p.lon, exact: true };
+      } else if (p.kind === 'place') {
+        point = await fetchPlaceDetails(p.placeId);
+      } else {
+        const { number } = splitAddress(fullAddress);
+        point = number
+          ? await resolveNumberPoint(p.street, number)
+          // Χωρίς αριθμό (χωριό, πλατεία): το σημείο του ίδιου του δρόμου.
+          : await fetchPlaceDetails(p.placeId);
+      }
+    }
+
+    const distance = await measureRoadDistance(origin, point);
+    resolvedRef.current = { address: fullAddress, point, distance };
+    return { point, distance };
   };
 
   const onAddressChange = (value: string) => {
@@ -310,45 +315,19 @@ export default function OrderCreationForm({
     if (debounceRef.current) clearTimeout(debounceRef.current);
 
     // Ψάχνουμε μόνο το κομμάτι της οδού (χωρίς τον αριθμό).
-    const { street, number } = splitAddress(value);
+    const { street } = splitAddress(value);
 
-    // Ακυρώνουμε τις συντεταγμένες ΜΟΝΟ αν άλλαξε ο ΔΡΟΜΟΣ — όχι σε κάθε πλήκτρο.
-    // Έτσι το πληκτρολόγημα του αριθμού ΜΕΤΑ την επιλογή πρότασης δεν τις σβήνει.
-    if (norm(street) !== norm(destStreetRef.current || '')) {
-      setDest(null);
-      setDestExact(false);
-      baseDestRef.current = null;
-      destStreetRef.current = null;
-      destIsPlaceRef.current = false;
-      pendingStreetPlaceIdRef.current = null;
-      if (streetPointTimerRef.current) clearTimeout(streetPointTimerRef.current);
-    } else if (destIsPlaceRef.current) {
-      // Κατάστημα: το σημείο του POI είναι ήδη ακριβές και δεν αλλάζει με αριθμό.
-      setDest(baseDestRef.current);
-      setDestExact(true);
-    } else if (destStreetRef.current) {
-      // Ίδιος δρόμος, άλλαξε ο αριθμός. Το `destStreetRef` (και όχι το
-      // `baseDestRef`) είναι το σωστό κριτήριο: το σημείο του δρόμου μπορεί να
-      // μην έχει ζητηθεί ΑΚΟΜΑ — και ιδανικά να μη ζητηθεί ποτέ.
-      if (overrideDebounceRef.current) clearTimeout(overrideDebounceRef.current);
-      const streetForLookup = destStreetRef.current;
-      if (!number) {
-        // Έσβησε τον αριθμό: γυρνάμε στο σημείο του δρόμου — ζητώντας το τώρα,
-        // αν δεν το είχαμε ήδη.
-        if (baseDestRef.current) {
-          setDest(baseDestRef.current);
-          setDestExact(false);
-        } else {
-          scheduleStreetPoint(streetForLookup);
-        }
-      } else {
-        // Έρχεται αριθμός → το σημείο του σκέτου δρόμου δεν χρειάζεται πια.
-        if (streetPointTimerRef.current) clearTimeout(streetPointTimerRef.current);
-        overrideDebounceRef.current = setTimeout(() => {
-          applyNumberPoint(streetForLookup, number);
-        }, DEBOUNCE_MS);
-      }
+    // Άλλαξε ο δρόμος → η επιλογή δεν ισχύει πια. Καμία κλήση εδώ: ούτε για να
+    // ακυρωθεί κάτι, ούτε για να ζητηθεί κάτι νέο.
+    if (pendingRef.current && !stillMatches(pendingRef.current, value)) {
+      pendingRef.current = null;
     }
+    // Η ανάλυση είναι κλειδωμένη σε ΑΚΡΙΒΕΣ κείμενο· μόλις αυτό αλλάξει (π.χ.
+    // διορθώθηκε ο αριθμός), το προηγούμενο σημείο δεν ισχύει.
+    if (resolvedRef.current && resolvedRef.current.address !== value.trim()) {
+      resolvedRef.current = null;
+    }
+
     if (street.length < MIN_CHARS) {
       setSuggestions([]);
       setShowSuggestions(false);
@@ -362,14 +341,12 @@ export default function OrderCreationForm({
     debounceRef.current = setTimeout(() => fetchSuggestions(street), DEBOUNCE_MS);
   };
 
-  // Async: η Google δεν δίνει συντεταγμένες μέσα στις προτάσεις (βλ. Suggestion
-  // type) — χρειάζεται ένα Place Details call πριν έχουμε σημείο. Το κείμενο της
-  // διεύθυνσης μπαίνει ΑΜΕΣΩΣ (καμία καθυστέρηση στο UI), το σημείο έρχεται λίγο
-  // αργότερα και ενημερώνει το dest όταν φτάσει.
-  const selectSuggestion = async (s: Suggestion) => {
+  // Καμία κλήση εδώ. Η επιλογή απλώς καταγράφεται· πληρώνεται στην αποστολή.
+  const selectSuggestion = (s: Suggestion) => {
     setSuggestions([]);
     setShowSuggestions(false);
     if (debounceRef.current) clearTimeout(debounceRef.current);
+    resolvedRef.current = null;
 
     // ── ΚΑΤΑΣΤΗΜΑ (π.χ. «Coffee Train») ──
     // Το POI έχει ΔΙΚΕΣ ΤΟΥ ακριβείς συντεταγμένες — δεν είναι σημείο δρόμου,
@@ -379,76 +356,30 @@ export default function OrderCreationForm({
     if (s.isPlace) {
       const label = s.streetName ? `${s.street}, ${s.streetName}` : s.street;
       setAddress(label);
-      const details = await fetchPlaceDetails(s.placeId);
-      const hasCoords = !!details;
-      const basePoint = details ? { lat: details.lat, lon: details.lon } : null;
-      baseDestRef.current = basePoint;
-      setDest(basePoint);
-      setDestExact(hasCoords);
-      // Κρατάμε ΟΛΟ το κείμενο ως «δρόμο»: έτσι το onAddressChange το αναγνωρίζει
-      // και δεν σβήνει τις συντεταγμένες αν ο χρήστης προσθέσει κάτι (π.χ. όροφο).
-      destStreetRef.current = hasCoords ? label : null;
-      destIsPlaceRef.current = hasCoords;
+      pendingRef.current = { kind: 'place', label, placeId: s.placeId };
       return;
     }
 
     // ── ΟΔΟΣ ──
-    destIsPlaceRef.current = false;
     // Κρατάμε τον αριθμό που είχε ήδη γράψει ο χρήστης — ένα πεδίο, μία κίνηση.
     const { number } = splitAddress(address);
     setAddress(number ? `${s.street} ${number}` : `${s.street} `);
-    // Η πρόταση είναι σημείο ΔΡΟΜΟΥ· γίνεται ακριβής μόνο αν λυθεί ο αριθμός.
-    setDestExact(false);
-    setDest(null);
-    baseDestRef.current = null;
-    // Θυμόμαστε τον δρόμο ΑΜΕΣΩΣ (χωρίς να περιμένουμε τη Google) ώστε το επόμενο
-    // onChange — δηλαδή η πληκτρολόγηση του αριθμού — να ξέρει ότι είμαστε ακόμα
-    // «μέσα» στον ίδιο δρόμο και να μη μηδενίσει τα πάντα.
-    destStreetRef.current = s.street;
-    pendingStreetPlaceIdRef.current = s.placeId;
-
-    if (number) {
-      // Υπάρχει ήδη αριθμός: πάμε κατευθείαν στο ακριβές σημείο. Το σημείο του
-      // σκέτου δρόμου δεν χρειάζεται ποτέ, άρα δεν το πληρώνουμε.
-      applyNumberPoint(s.street, number);
-    } else {
-      // Χωρίς αριθμό (ακόμα): η κλήση για το σημείο του δρόμου μπαίνει σε
-      // αναμονή και ακυρώνεται αν ο χρήστης αρχίσει να γράφει αριθμό.
-      scheduleStreetPoint(s.street);
-    }
+    pendingRef.current = { kind: 'street', street: s.street, placeId: s.placeId };
   };
 
   // Εφαρμογή διεύθυνσης από τον επιλογέα — είτε αποθηκευμένη, είτε πινέζα χάρτη.
   const applyPicked = (a: { address: string; lat: number | null; lon: number | null; alreadySaved: boolean }) => {
     setAddress(a.address);
-    // Το σημείο το όρισε άνθρωπος: ακυρώνουμε ό,τι εκκρεμεί προς τη Google, ώστε
-    // μια καθυστερημένη απάντηση να μην έρθει από πάνω και το σβήσει.
-    if (streetPointTimerRef.current) clearTimeout(streetPointTimerRef.current);
-    if (overrideDebounceRef.current) clearTimeout(overrideDebounceRef.current);
-    pendingStreetPlaceIdRef.current = null;
-    const hasCoords = a.lat != null && a.lon != null;
-    const basePoint = hasCoords ? { lat: a.lat!, lon: a.lon! } : null;
-    baseDestRef.current = basePoint;
-    setDest(basePoint);
-    // Αποθηκευμένη διεύθυνση ή πινέζα χάρτη: το σημείο το όρισε ΑΝΘΡΩΠΟΣ, άρα
-    // είναι ό,τι ακριβέστερο έχουμε — δεν το σημαδεύουμε ποτέ ως προσεγγιστικό.
-    setDestExact(hasCoords);
-    destIsPlaceRef.current = false;
-    // Ίδιο κόλπο με το selectSuggestion: θυμόμαστε τον δρόμο ώστε μια μετέπειτα
-    // προσθήκη αριθμού να μη σβήσει τις συντεταγμένες.
-    destStreetRef.current = hasCoords ? splitAddress(a.address).street : null;
+    resolvedRef.current = null;
+    // Το σημείο το όρισε ΑΝΘΡΩΠΟΣ, άρα είναι ό,τι ακριβέστερο έχουμε — και δεν
+    // κοστίζει τίποτα στην αποστολή, γιατί δεν χρειάζεται καμία κλήση.
+    pendingRef.current =
+      a.lat != null && a.lon != null
+        ? { kind: 'picked', street: splitAddress(a.address).street, lat: a.lat, lon: a.lon }
+        : null;
     setSuggestions([]);
     setShowSuggestions(false);
   };
-
-  // ── Απόσταση / χρέωση της τρέχουσας διεύθυνσης ──
-  // ΟΔΙΚΗ απόσταση μέσω δρόμων (Geoapify Routing) με άμεσο fallback στην ευθεία:
-  // το badge δείχνει αμέσως έναν αριθμό και τον αναβαθμίζει μόλις γυρίσει η
-  // διαδρομή. Ό,τι δείχνει το badge είναι ΚΑΙ ό,τι αποθηκεύεται στην παραγγελία.
-  const distance = useRoadDistance(origin, dest);
-  const distanceKm = distance.km;
-  const surcharge = distanceKm !== null ? surchargeFor(distanceKm) : 0;
-  const tooFar = distanceKm !== null && distanceKm > MAX_DISTANCE_KM;
 
   const effectiveDelay =
     delayMinutes === -1
@@ -459,41 +390,16 @@ export default function OrderCreationForm({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (busy) return;
+
     const fullAddress = address.trim();
     if (!fullAddress) {
       toast.error('Παρακαλώ εισάγετε διεύθυνση παράδοσης.');
       return;
     }
 
-    // Η οδική απόσταση είναι ακόμα στον αέρα. Μισό δευτερόλεπτο αναμονής είναι
-    // προτιμότερο από παραγγελία χρεωμένη με την (μικρότερη) ευθεία. Δεν κολλάει
-    // ποτέ: το useRoadDistance έχει πλαφόν 5s και μετά πέφτει στην ευθεία.
-    if (distance.loading) {
-      toast.info('Υπολογίζεται η διαδρομή — μια στιγμή.');
-      return;
-    }
-
-    // ── Όριο 15 χλμ: σκληρό μπλοκ ──
-    // Ισχύει ΜΟΝΟ όταν ξέρουμε πραγματικά την απόσταση. Αν λείπουν συντεταγμένες
-    // (π.χ. ο χρήστης έγραψε τη διεύθυνση χωρίς να διαλέξει πρόταση) αφήνουμε την
-    // παραγγελία να περάσει: καλύτερα μια αχρέωτη παραγγελία από μπλοκαρισμένο μαγαζί.
-    if (tooFar) {
-      toast.error(
-        `Η διεύθυνση απέχει ${formatKm(distanceKm)} — πάνω από το όριο των ${MAX_DISTANCE_KM} χλμ. Η παραγγελία δεν μπορεί να σταλεί.`
-      );
-      return;
-    }
-
-    // ── Επιπλέον χρέωση: το κατάστημα ΠΡΕΠΕΙ να πατήσει «Συνέχεια» ──
-    if (surcharge > 0) {
-      const ok = await confirmDialog(
-        `Η διεύθυνση απέχει ${formatKm(distanceKm)}, δηλαδή πάνω από τα ${String(FREE_RADIUS_KM).replace('.', ',')} χλμ. ` +
-        `Η παραγγελία χρεώνεται επιπλέον ${formatEuro(surcharge)}.`,
-        { title: 'Επιπλέον χρέωση απόστασης', confirmLabel: 'Συνέχεια' }
-      );
-      if (!ok) return;
-    }
-
+    // Οι ΤΖΑΜΠΑ έλεγχοι πρώτοι: δεν έχει νόημα να πληρώσουμε ανάλυση διεύθυνσης
+    // για μια φόρμα που θα κοπεί έτσι κι αλλιώς σε λάθος ώρα αποστολής.
     if (delayMinutes === -2) {
       if (!scheduledTime) {
         toast.error('Επιλέξτε ώρα αποστολής.');
@@ -505,7 +411,47 @@ export default function OrderCreationForm({
       }
     }
 
-    setIsSubmitting(true);
+    // ── ΕΔΩ, ΚΑΙ ΜΟΝΟ ΕΔΩ, ΞΟΔΕΥΟΥΜΕ ──────────────────────────────────────────
+    // Μία ανάλυση σημείου (Google) + μία μέτρηση διαδρομής (Geoapify) ανά
+    // παραγγελία, ό,τι κι αν πληκτρολογήθηκε πριν και με όποια σειρά. Και τα δύο
+    // αποτελέσματα είναι cached στο κείμενο της διεύθυνσης, ώστε ένα «Ακύρωση»
+    // στον διάλογο χρέωσης να μη διπλασιάζει το κόστος στο επόμενο πάτημα.
+    setPhase('measuring');
+    const { point, distance } = await resolveAndMeasure(fullAddress);
+    const distanceKm = distance.km;
+    const surcharge = distanceKm !== null ? surchargeFor(distanceKm) : 0;
+
+    // ── Όριο 15 χλμ: σκληρό μπλοκ ──
+    // Ισχύει ΜΟΝΟ όταν ξέρουμε πραγματικά την απόσταση. Αν λείπουν συντεταγμένες
+    // (π.χ. ο χρήστης έγραψε τη διεύθυνση χωρίς να διαλέξει πρόταση) αφήνουμε την
+    // παραγγελία να περάσει: καλύτερα μια αχρέωτη παραγγελία από μπλοκαρισμένο μαγαζί.
+    if (distanceKm !== null && distanceKm > MAX_DISTANCE_KM) {
+      setPhase('idle');
+      toast.error(
+        `Η διεύθυνση απέχει ${formatKm(distanceKm)} — πάνω από το όριο των ${MAX_DISTANCE_KM} χλμ. Η παραγγελία δεν μπορεί να σταλεί.`
+      );
+      return;
+    }
+
+    // ── Επιπλέον χρέωση: το κατάστημα ΠΡΕΠΕΙ να πατήσει «Συνέχεια» ──
+    if (surcharge > 0) {
+      // Ο ΑΡΙΘΜΟΣ ΔΕΝ ΒΡΕΘΗΚΕ: το σημείο είναι του δρόμου, όχι του κτιρίου. Σε
+      // δρόμο 2 χλμ (π.χ. Κ. Καραμανλή) αυτό είναι έως 2 χλμ σφάλμα και έως
+      // 3,90 € λάθος χρέωση. Το λέμε ΕΔΩ, τη στιγμή που παίζονται τα λεφτά.
+      const approx =
+        point && !point.exact && splitAddress(fullAddress).number
+          ? ' Ο αριθμός δεν βρέθηκε στον χάρτη, οπότε η απόσταση είναι κατά προσέγγιση (σημείο του δρόμου).'
+          : '';
+      setPhase('idle');
+      const ok = await confirmDialog(
+        `Η διεύθυνση απέχει ${formatKm(distanceKm)}, δηλαδή πάνω από τα ${String(FREE_RADIUS_KM).replace('.', ',')} χλμ. ` +
+        `Η παραγγελία χρεώνεται επιπλέον ${formatEuro(surcharge)}.` + approx,
+        { title: 'Επιπλέον χρέωση απόστασης', confirmLabel: 'Συνέχεια' }
+      );
+      if (!ok) return;
+    }
+
+    setPhase('saving');
 
     // Καθυστερημένη αποστολή: μπαίνει ως 'scheduled' και γίνεται 'pending' όταν
     // λάχει η ώρα. Το status είναι σημαντικό — η edge function των push αγνοεί
@@ -520,13 +466,13 @@ export default function OrderCreationForm({
       comments: comments,
       status: scheduledAt ? 'scheduled' : 'pending',
       scheduled_at: scheduledAt,
-      latitude: dest?.lat ?? null,
-      longitude: dest?.lon ?? null,
+      latitude: point?.lat ?? null,
+      longitude: point?.lon ?? null,
       distance_km: distanceKm,
       surcharge: distanceKm !== null ? surcharge : null,
     });
 
-    setIsSubmitting(false);
+    setPhase('idle');
 
     if (error) {
       console.error(error);
@@ -542,19 +488,24 @@ export default function OrderCreationForm({
       setAddress('');
       setComments('');
       setPaymentMethod('cash');
-      setDest(null);
-      setDestExact(false);
-      destStreetRef.current = null;
-      destIsPlaceRef.current = false;
+      pendingRef.current = null;
+      resolvedRef.current = null;
       setDelayMinutes(0);
       setCustomDelay('');
       setScheduledTime('');
       setSuggestions([]);
       setShowSuggestions(false);
+      // Η απόσταση δεν φαίνεται πια όσο γράφεται η διεύθυνση (βλ. «Ο ΥΠΟΛΟΓΙΣΜΟΣ
+      // ΓΙΝΕΤΑΙ ΜΟΝΟ ΣΤΗΝ ΑΠΟΣΤΟΛΗ»), οπότε το μήνυμα επιτυχίας είναι η μόνη
+      // ευκαιρία να δει ο μαγαζάτορας με τι χρεώθηκε.
+      const charged =
+        distanceKm !== null
+          ? ` (${formatKm(distanceKm)}${surcharge > 0 ? ` · +${formatEuro(surcharge)}` : ''})`
+          : '';
       toast.success(
         scheduledAt
-          ? `Η παραγγελία προγραμματίστηκε — θα σταλεί στους διανομείς σε ${effectiveDelay} λεπτά.`
-          : 'Η παραγγελία δημιουργήθηκε επιτυχώς!'
+          ? `Η παραγγελία προγραμματίστηκε${charged} — θα σταλεί στους διανομείς σε ${effectiveDelay} λεπτά.`
+          : `Η παραγγελία δημιουργήθηκε επιτυχώς!${charged}`
       );
     }
   };
@@ -611,9 +562,6 @@ export default function OrderCreationForm({
                 e.target.style.boxShadow = 'none';
                 // μικρή καθυστέρηση ώστε να προλάβει το click στην πρόταση
                 setTimeout(() => setShowSuggestions(false), 150);
-                // Έφυγε από το πεδίο χωρίς αριθμό: δεν έχει νόημα να περιμένουμε
-                // άλλο — ζητάμε τώρα το σημείο του δρόμου (βλ. STREET_POINT_DELAY_MS).
-                flushStreetPoint();
               }}
               style={{ ...inputStyle, paddingLeft: '40px', paddingRight: '46px' }}
             />
@@ -701,63 +649,12 @@ export default function OrderCreationForm({
           </div>
         </div>
 
-        {/* ── Απόσταση / χρέωση / όριο ── */}
-        {/* Το badge μένει ΜΟΝΤΑΡΙΣΜΕΝΟ και όσο υπολογίζεται: αν εμφανιζόταν μόνο
-            με έτοιμο αριθμό, θα «πεταγόταν» στη σελίδα και θα μετακινούσε τα
-            πεδία από κάτω — δηλαδή ίδια εντύπωση αστάθειας με τον αριθμό που
-            άλλαζε. Ουδέτερο χρώμα όσο δεν ξέρουμε αν υπάρχει χρέωση. */}
-        {(distanceKm !== null || distance.loading) && (
-          <div
-            className="mt-2 mb-1 flex items-center flex-wrap gap-x-3 gap-y-1 px-3 py-2 rounded-xl text-xs font-semibold"
-            style={
-              distance.loading
-                ? { backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border-default)', color: 'var(--text-secondary)' }
-                : tooFar
-                ? { backgroundColor: 'var(--danger-bg)', border: '1px solid var(--danger-border)', color: 'var(--danger)' }
-                : surcharge > 0
-                ? { backgroundColor: 'var(--warning-bg)', border: '1px solid var(--warning-border)', color: 'var(--warning)' }
-                : { backgroundColor: 'var(--success-bg)', border: '1px solid var(--success-border)', color: 'var(--success)' }
-            }
-          >
-            <span className="inline-flex items-center gap-1.5">
-              {distance.loading ? (
-                <Route className="w-3.5 h-3.5 opacity-60" />
-              ) : tooFar ? (
-                <AlertTriangle className="w-3.5 h-3.5" />
-              ) : (
-                <Route className="w-3.5 h-3.5" />
-              )}
-              {/* ΚΑΜΙΑ τιμή όσο υπολογίζεται — ποτέ η ευθεία ως «προσωρινή». */}
-              {distance.loading ? 'Υπολογισμός διαδρομής…' : formatKm(distanceKm)}
-              {/* Ποια απόσταση βλέπει το μαγαζί: οδική ή (εφεδρικά) ευθεία.
-                  Χρεώνεται αυτό που γράφει εδώ, οπότε δεν το κρύβουμε. */}
-              {!distance.loading && (
-                <span className="font-normal opacity-70">
-                  {distance.source === 'road'
-                    ? `· οδικά${distance.minutes !== null ? ` · ~${distance.minutes}′` : ''}`
-                    : '· σε ευθεία'}
-                </span>
-              )}
-              {/* Ο ΑΡΙΘΜΟΣ ΔΕΝ ΒΡΕΘΗΚΕ: το σημείο είναι του δρόμου, όχι του κτιρίου.
-                  Σε δρόμο 2 χλμ (π.χ. Κ. Καραμανλή) αυτό είναι έως 2 χλμ σφάλμα και
-                  έως 3,90 € λάθος χρέωση. Επειδή χρεώνεται ό,τι γράφει το badge,
-                  η ανακρίβεια πρέπει να είναι ΟΡΑΤΗ — όχι σιωπηλή. */}
-              {!distance.loading && !destExact && dest !== null && splitAddress(address).number && (
-                <span className="font-normal opacity-70">· κατά προσέγγιση</span>
-              )}
-            </span>
-            {/* Όσο υπολογίζεται ΔΕΝ λέμε τίποτα για χρέωση: με km = null το
-                surcharge είναι 0, οπότε θα γράφαμε «Χωρίς επιπλέον χρέωση» σε
-                μια διεύθυνση που μπορεί να καταλήξει χρεώσιμη. */}
-            {distance.loading ? null : tooFar ? (
-              <span>Πάνω από το όριο των {MAX_DISTANCE_KM} χλμ — δεν επιτρέπεται</span>
-            ) : surcharge > 0 ? (
-              <span>Επιπλέον χρέωση {formatEuro(surcharge)}</span>
-            ) : (
-              <span>Χωρίς επιπλέον χρέωση</span>
-            )}
-          </div>
-        )}
+        {/* Το ζωντανό badge απόστασης αφαιρέθηκε μαζί με τους ζωντανούς
+            υπολογισμούς: κάθε φορά που εμφάνιζε αριθμό, κάποιος τον είχε
+            πληρώσει. Δεν μπήκε τίποτα στη θέση του (απόφαση χρήστη — έπιανε
+            χώρο χωρίς να λέει κάτι): η πραγματική τιμή έρχεται στον διάλογο
+            επιπλέον χρέωσης και στο μήνυμα επιτυχίας, και η αναμονή φαίνεται
+            πάνω στο ίδιο το κουμπί αποστολής. */}
 
         {/* Η αποθήκευση διεύθυνσης ΔΕΝ προτείνεται εδώ (απόφαση χρήστη): το inline
             κουμπί εμφανιζόταν σε κάθε πληκτρολόγηση οδού και ενοχλούσε στη ροή
@@ -927,41 +824,36 @@ export default function OrderCreationForm({
         </div>
 
         {/* Submit */}
+        {/* Το κουμπί ΔΕΝ κλειδώνει πια προληπτικά για απόσταση εκτός ορίου: η
+            απόσταση είναι άγνωστη μέχρι να το πατήσει κάποιος. Το όριο των 15 χλμ
+            ελέγχεται μέσα στο handleSubmit και κόβει την παραγγελία εκεί. */}
         <button
           type="submit"
-          disabled={isSubmitting || tooFar}
-          title={tooFar ? `Πάνω από το όριο των ${MAX_DISTANCE_KM} χλμ` : undefined}
+          disabled={busy}
           className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold text-white transition-all duration-200"
           style={{
-            background: tooFar
-              ? 'var(--text-muted)'
-              : isSubmitting
+            background: busy
               ? 'var(--accent-hover)'
               : 'linear-gradient(135deg, var(--accent), var(--accent-hover))',
-            boxShadow: isSubmitting || tooFar ? 'none' : '0 4px 16px var(--accent-muted)',
-            opacity: isSubmitting || tooFar ? 0.75 : 1,
-            cursor: isSubmitting || tooFar ? 'not-allowed' : 'pointer',
+            boxShadow: busy ? 'none' : '0 4px 16px var(--accent-muted)',
+            opacity: busy ? 0.75 : 1,
+            cursor: busy ? 'not-allowed' : 'pointer',
           }}
           onMouseEnter={e => {
-            if (!isSubmitting && !tooFar) {
+            if (!busy) {
               (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-1px)';
               (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 8px 24px var(--accent-muted)';
             }
           }}
           onMouseLeave={e => {
             (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(0)';
-            (e.currentTarget as HTMLButtonElement).style.boxShadow = isSubmitting || tooFar ? 'none' : '0 4px 16px var(--accent-muted)';
+            (e.currentTarget as HTMLButtonElement).style.boxShadow = busy ? 'none' : '0 4px 16px var(--accent-muted)';
           }}
         >
-          {tooFar ? (
-            <>
-              <AlertTriangle className="w-4 h-4" />
-              Εκτός ορίου {MAX_DISTANCE_KM} χλμ
-            </>
-          ) : isSubmitting ? (
+          {busy ? (
             <>
               <div className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
-              Αποστολή...
+              {phase === 'measuring' ? 'Υπολογισμός διαδρομής…' : 'Αποστολή...'}
             </>
           ) : (
             <>
