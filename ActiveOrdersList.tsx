@@ -56,7 +56,7 @@ export default function ActiveOrdersList({ storeId }: { storeId: string }) {
   /* ── Τίτλος ── */
   const header = (
     <div className="mb-6 flex items-center gap-3 min-w-0">
-      <h1 className="text-2xl font-bold tracking-tight shrink-0" style={{ color: 'var(--text-primary)' }}>
+      <h1 className="section-title text-2xl font-bold tracking-tight shrink-0" style={{ color: 'var(--text-primary)' }}>
         Ενεργές Παραγγελίες
       </h1>
     </div>

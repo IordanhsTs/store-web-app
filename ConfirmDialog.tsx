@@ -98,10 +98,11 @@ export default function ConfirmDialogHost() {
           <button
             type="button"
             onClick={() => close(true)}
-            className="px-4 py-2 rounded-lg text-sm font-semibold text-white transition-colors"
+            className="px-4 py-2 rounded-lg text-sm font-semibold transition-colors"
             style={{
+              color: request.danger ? '#fff' : 'var(--on-accent)',
               background: request.danger
-                ? 'var(--danger)'
+                ? 'var(--danger-solid)'
                 : 'linear-gradient(135deg, var(--accent), var(--accent-hover))',
             }}
           >

@@ -139,8 +139,9 @@ export default function Navbar({ storeId, storeName }: { storeId: string; storeN
               >
                 {/* Logo */}
                 <div
-                  className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-base shadow-sm"
+                  className="w-8 h-8 rounded-lg flex items-center justify-center font-bold text-base shadow-sm"
                   style={{
+                    color: 'var(--on-accent)',
                     background: 'linear-gradient(135deg, var(--accent), var(--accent-hover))',
                     boxShadow: '0 2px 8px var(--accent-muted)',
                   }}
@@ -185,14 +186,14 @@ export default function Navbar({ storeId, storeName }: { storeId: string; storeN
               <button
                 onClick={() => setContactModalOpen(true)}
                 className="p-2 rounded-lg transition-all duration-150"
-                style={{ color: 'var(--text-muted)' }}
+                style={{ color: 'var(--nav-icon)' }}
                 onMouseEnter={e => {
                   (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'var(--accent-muted)';
                   (e.currentTarget as HTMLButtonElement).style.color = 'var(--accent)';
                 }}
                 onMouseLeave={e => {
                   (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'transparent';
-                  (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-muted)';
+                  (e.currentTarget as HTMLButtonElement).style.color = 'var(--nav-icon)';
                 }}
                 title="Μήνυμα στο κέντρο ελέγχου"
               >
@@ -203,14 +204,14 @@ export default function Navbar({ storeId, storeName }: { storeId: string; storeN
               <button
                 onClick={() => setHistoryModalOpen(true)}
                 className="p-2 rounded-lg transition-all duration-150 group"
-                style={{ color: 'var(--text-muted)' }}
+                style={{ color: 'var(--nav-icon)' }}
                 onMouseEnter={e => {
                   (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'var(--accent-muted)';
                   (e.currentTarget as HTMLButtonElement).style.color = 'var(--accent)';
                 }}
                 onMouseLeave={e => {
                   (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'transparent';
-                  (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-muted)';
+                  (e.currentTarget as HTMLButtonElement).style.color = 'var(--nav-icon)';
                 }}
                 title="Ιστορικό & Στατιστικά"
               >
@@ -222,14 +223,14 @@ export default function Navbar({ storeId, storeName }: { storeId: string; storeN
                 <button
                   onClick={() => setTheme(isDark ? 'light' : 'dark')}
                   className="p-2 rounded-lg transition-all duration-150 relative overflow-hidden"
-                  style={{ color: 'var(--text-muted)' }}
+                  style={{ color: 'var(--nav-icon)' }}
                   onMouseEnter={e => {
                     (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'var(--accent-muted)';
                     (e.currentTarget as HTMLButtonElement).style.color = 'var(--accent)';
                   }}
                   onMouseLeave={e => {
                     (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'transparent';
-                    (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-muted)';
+                    (e.currentTarget as HTMLButtonElement).style.color = 'var(--nav-icon)';
                   }}
                   title={isDark ? 'Εναλλαγή σε Light Mode' : 'Εναλλαγή σε Dark Mode'}
                 >
@@ -264,7 +265,7 @@ export default function Navbar({ storeId, storeName }: { storeId: string; storeN
                 <button
                   onClick={toggleSound}
                   className="p-2 rounded-lg transition-all duration-150"
-                  style={{ color: isSoundEnabled ? 'var(--accent)' : 'var(--text-muted)' }}
+                  style={{ color: isSoundEnabled ? 'var(--accent)' : 'var(--nav-icon)' }}
                   onMouseEnter={e => {
                     (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'var(--accent-muted)';
                   }}
@@ -305,7 +306,7 @@ export default function Navbar({ storeId, storeName }: { storeId: string; storeN
               <button
                 onClick={() => setMobileMenuOpen(o => !o)}
                 className="p-2 rounded-lg transition-all duration-150"
-                style={{ color: 'var(--text-muted)' }}
+                style={{ color: 'var(--nav-icon)' }}
                 aria-label={mobileMenuOpen ? 'Κλείσιμο μενού' : 'Άνοιγμα μενού'}
                 aria-expanded={mobileMenuOpen}
               >

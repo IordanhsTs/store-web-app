@@ -43,8 +43,9 @@ export default function LoginPage() {
           {/* Logo & Brand */}
           <div className="text-center mb-10">
             <div
-              className="w-16 h-16 rounded-2xl flex items-center justify-center text-white font-bold text-2xl mx-auto mb-5 shadow-lg"
+              className="w-16 h-16 rounded-2xl flex items-center justify-center font-bold text-2xl mx-auto mb-5 shadow-lg"
               style={{
+                color: 'var(--on-accent)',
                 background: 'linear-gradient(135deg, var(--accent), var(--accent-hover))',
                 boxShadow: '0 8px 24px var(--accent-muted)',
               }}

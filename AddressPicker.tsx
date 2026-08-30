@@ -191,7 +191,7 @@ export default function AddressPicker({
 
   const tabStyle = (active: boolean) =>
     active
-      ? { background: 'linear-gradient(135deg, var(--accent), var(--accent-hover))', color: '#fff' }
+      ? { background: 'linear-gradient(135deg, var(--accent), var(--accent-hover))', color: 'var(--on-accent)' }
       : { color: 'var(--text-secondary)', backgroundColor: 'transparent' };
 
   // PORTAL — ΜΗΝ ΤΟ ΑΦΑΙΡΕΣΕΙΣ: η στήλη της φόρμας (app/page.tsx) έχει
@@ -398,8 +398,9 @@ export default function AddressPicker({
                   type="button"
                   onClick={confirmPin}
                   disabled={busy || !pin || pinTooFar}
-                  className="shrink-0 mt-3 w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold text-white transition-all"
+                  className="shrink-0 mt-3 w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all"
                   style={{
+                    color: 'var(--on-accent)',
                     background: !pin || pinTooFar ? 'var(--text-muted)' : 'linear-gradient(135deg, var(--accent), var(--accent-hover))',
                     opacity: busy ? 0.75 : 1,
                     cursor: !pin || pinTooFar ? 'not-allowed' : 'pointer',

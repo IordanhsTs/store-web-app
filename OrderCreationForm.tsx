@@ -626,7 +626,7 @@ export default function OrderCreationForm({
     <>
       {/* Τίτλος */}
       <div className="mb-6 flex items-center gap-3 min-w-0">
-        <h1 className="text-2xl font-bold tracking-tight shrink-0" style={{ color: 'var(--text-primary)' }}>
+        <h1 className="section-title text-2xl font-bold tracking-tight shrink-0" style={{ color: 'var(--text-primary)' }}>
           Νέα Παραγγελία
         </h1>
       </div>
@@ -636,8 +636,8 @@ export default function OrderCreationForm({
         className="p-6 rounded-2xl card-surface"
         style={{
           backgroundColor: 'var(--bg-card)',
-          border: '2px solid var(--accent)',
-          boxShadow: '0 0 0 1px var(--accent-muted), var(--shadow-sm)',
+          border: '2px solid var(--card-emphasis-border)',
+          boxShadow: 'var(--card-emphasis-shadow)',
         }}
       >
         {/* ── Διεύθυνση: οδός ΚΑΙ αριθμός σε ΕΝΑ πεδίο ── */}
@@ -702,7 +702,7 @@ export default function OrderCreationForm({
               {saved.length > 0 && (
                 <span
                   className="absolute -top-1 -right-1 min-w-[15px] h-[15px] px-1 rounded-full text-[9px] font-black flex items-center justify-center"
-                  style={{ backgroundColor: 'var(--accent)', color: '#fff' }}
+                  style={{ backgroundColor: 'var(--accent)', color: 'var(--on-accent)' }}
                 >
                   {saved.length}
                 </span>
@@ -805,19 +805,9 @@ export default function OrderCreationForm({
             <button
               type="button"
               onClick={() => setPaymentMethod('cash')}
-              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200"
-              style={
-                paymentMethod === 'cash'
-                  ? {
-                      background: 'linear-gradient(135deg, var(--accent), var(--accent-hover))',
-                      color: '#fff',
-                      boxShadow: '0 2px 8px var(--accent-muted)',
-                    }
-                  : {
-                      color: 'var(--text-secondary)',
-                      backgroundColor: 'transparent',
-                    }
-              }
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 seg-payment ${
+                paymentMethod === 'cash' ? 'seg-active' : 'seg'
+              }`}
             >
               <Banknote className="w-4 h-4" />
               Μετρητά
@@ -826,19 +816,9 @@ export default function OrderCreationForm({
             <button
               type="button"
               onClick={() => setPaymentMethod('card')}
-              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200"
-              style={
-                paymentMethod === 'card'
-                  ? {
-                      background: 'linear-gradient(135deg, var(--accent), var(--accent-hover))',
-                      color: '#fff',
-                      boxShadow: '0 2px 8px var(--accent-muted)',
-                    }
-                  : {
-                      color: 'var(--text-secondary)',
-                      backgroundColor: 'transparent',
-                    }
-              }
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 seg-payment ${
+                paymentMethod === 'card' ? 'seg-active' : 'seg'
+              }`}
             >
               <CreditCard className="w-4 h-4" />
               Κάρτα
@@ -860,15 +840,9 @@ export default function OrderCreationForm({
                 key={m}
                 type="button"
                 onClick={() => setDelayMinutes(m)}
-                className="flex-1 py-2 rounded-lg text-xs font-semibold transition-all duration-200"
-                style={
-                  delayMinutes === m
-                    ? {
-                        background: 'linear-gradient(135deg, var(--accent), var(--accent-hover))',
-                        color: '#fff',
-                      }
-                    : { color: 'var(--text-secondary)', backgroundColor: 'transparent' }
-                }
+                className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all duration-200 ${
+                  delayMinutes === m ? 'seg-active' : 'seg'
+                }`}
               >
                 {m === 0 ? 'Άμεσα' : `${m}′`}
               </button>
@@ -876,24 +850,18 @@ export default function OrderCreationForm({
             <button
               type="button"
               onClick={() => setDelayMinutes(-1)}
-              className="flex-1 py-2 rounded-lg text-xs font-semibold transition-all duration-200"
-              style={
-                delayMinutes === -1
-                  ? { background: 'linear-gradient(135deg, var(--accent), var(--accent-hover))', color: '#fff' }
-                  : { color: 'var(--text-secondary)', backgroundColor: 'transparent' }
-              }
+              className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all duration-200 ${
+                delayMinutes === -1 ? 'seg-active' : 'seg'
+              }`}
             >
               Άλλο
             </button>
             <button
               type="button"
               onClick={() => setDelayMinutes(-2)}
-              className="flex-1 py-2 rounded-lg text-xs font-semibold transition-all duration-200"
-              style={
-                delayMinutes === -2
-                  ? { background: 'linear-gradient(135deg, var(--accent), var(--accent-hover))', color: '#fff' }
-                  : { color: 'var(--text-secondary)', backgroundColor: 'transparent' }
-              }
+              className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all duration-200 ${
+                delayMinutes === -2 ? 'seg-active' : 'seg'
+              }`}
             >
               Ώρα
             </button>
@@ -956,8 +924,9 @@ export default function OrderCreationForm({
         <button
           type="submit"
           disabled={busy}
-          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold text-white transition-all duration-200"
+          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all duration-200"
           style={{
+            color: 'var(--on-accent)',
             background: busy
               ? 'var(--accent-hover)'
               : 'linear-gradient(135deg, var(--accent), var(--accent-hover))',
@@ -978,7 +947,7 @@ export default function OrderCreationForm({
         >
           {busy ? (
             <>
-              <div className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+              <div className="w-4 h-4 rounded-full border-2 spinner-on-accent animate-spin" />
               {phase === 'measuring' ? 'Υπολογισμός διαδρομής…' : 'Αποστολή...'}
             </>
           ) : (

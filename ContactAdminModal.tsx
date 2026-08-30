@@ -70,7 +70,7 @@ export default function ContactAdminModal({
           <div className="flex items-center gap-3">
             <div
               className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
-              style={{ background: 'linear-gradient(135deg, var(--accent), var(--accent-hover))', color: '#fff' }}
+              style={{ background: 'linear-gradient(135deg, var(--accent), var(--accent-hover))', color: 'var(--on-accent)' }}
             >
               <MessageSquare size={20} />
             </div>
@@ -116,8 +116,9 @@ export default function ContactAdminModal({
         <button
           type="submit"
           disabled={sending}
-          className="w-full py-3 rounded-xl font-bold text-white transition-all flex items-center justify-center gap-2"
+          className="w-full py-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2"
           style={{
+            color: 'var(--on-accent)',
             background: sending ? 'var(--accent-hover)' : 'linear-gradient(135deg, var(--accent), var(--accent-hover))',
             boxShadow: sending ? 'none' : '0 4px 16px var(--accent-muted)',
             opacity: sending ? 0.8 : 1,
@@ -126,7 +127,7 @@ export default function ContactAdminModal({
         >
           {sending ? (
             <>
-              <div className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+              <div className="w-4 h-4 rounded-full border-2 spinner-on-accent animate-spin" />
               Αποστολή...
             </>
           ) : (

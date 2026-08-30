@@ -220,7 +220,7 @@ export default function HistoryStatsModal({ isOpen, onClose, storeId }: HistoryS
                       dateRange === filter.val
                         ? {
                             background: 'linear-gradient(135deg, var(--accent), var(--accent-hover))',
-                            color: '#fff',
+                            color: 'var(--on-accent)',
                             boxShadow: '0 2px 8px var(--accent-muted)',
                           }
                         : {
@@ -460,7 +460,7 @@ export default function HistoryStatsModal({ isOpen, onClose, storeId }: HistoryS
                     showOrderList
                       ? {
                           background: 'linear-gradient(135deg, var(--accent), var(--accent-hover))',
-                          color: '#fff',
+                          color: 'var(--on-accent)',
                           boxShadow: '0 2px 8px var(--accent-muted)',
                         }
                       : {

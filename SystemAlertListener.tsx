@@ -111,8 +111,9 @@ export default function SystemAlertListener({ storeId }: { storeId: string }) {
 
         <button
           onClick={() => setAlertMessage(null)}
-          className="w-full py-3.5 rounded-xl font-bold text-white transition-all flex items-center justify-center gap-2"
+          className="w-full py-3.5 rounded-xl font-bold transition-all flex items-center justify-center gap-2"
           style={{
+            color: 'var(--on-accent)',
             background: 'linear-gradient(135deg, var(--accent), var(--accent-hover))',
             boxShadow: '0 4px 16px var(--accent-muted)'
           }}

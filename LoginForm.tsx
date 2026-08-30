@@ -134,8 +134,9 @@ export default function LoginForm() {
       <button
         type="submit"
         disabled={loading}
-        className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold text-white transition-all duration-150 mt-2"
+        className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold transition-all duration-150 mt-2"
         style={{
+          color: 'var(--on-accent)',
           background: loading
             ? 'var(--accent-hover)'
             : 'linear-gradient(135deg, var(--accent), var(--accent-hover))',
@@ -156,7 +157,7 @@ export default function LoginForm() {
       >
         {loading ? (
           <>
-            <div className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+            <div className="w-4 h-4 rounded-full border-2 spinner-on-accent animate-spin" />
             Σύνδεση...
           </>
         ) : (

@@ -29,6 +29,18 @@
   --accent-hover:   #B08D52;
   --accent-light:   #F5ECD9;
   --accent-muted:   rgba(197, 160, 102, 0.12);
+  /* Χρώμα κειμένου/εικονιδίου ΠΑΝΩ σε χρυσή επιφάνεια. Στο light είναι λευκό
+     (ό,τι ίσχυε πάντα)· στο dark γίνεται σκούρο navy, γιατί το ανοιχτό σαμπανιζέ
+     χρυσό του dark δεν σηκώνει λευκό κείμενο. */
+  --on-accent:      #FFFFFF;
+
+  /* Εικονίδια ενεργειών στη μπάρα. Στο light μένουν ουδέτερα όπως πάντα· στο dark
+     παίρνουν απαλό σαμπανιζέ, όπως στη σχεδιαστική αναφορά. */
+  --nav-icon:       var(--text-muted);
+
+  /* Έμφαση της κάρτας «Νέα Παραγγελία» (χρυσό περίγραμμα + λάμψη) */
+  --card-emphasis-border: var(--accent);
+  --card-emphasis-shadow: 0 0 0 1px var(--accent-muted), var(--shadow-sm);
 
   /* Semantic colors */
   --success:        #16A34A;
@@ -37,8 +49,13 @@
   --danger:         #DC2626;
   --danger-bg:      #FEF2F2;
   --danger-border:  #FECACA;
+  /* Γεμάτο κόκκινο κουμπί (ConfirmDialog). Ξεχωριστό από το --danger γιατί στο
+     dark το --danger είναι ανοιχτό κοραλί για ΚΕΙΜΕΝΟ — ως φόντο δεν σηκώνει
+     λευκά γράμματα (2,9:1). */
+  --danger-solid:   #DC2626;
   --warning:        #D97706;
   --warning-bg:     #FFFBEB;
+  --warning-border: #FDE68A;
   --info:           #2563EB;
   --info-bg:        #EFF6FF;
   --info-border:    #BFDBFE;
@@ -61,6 +78,9 @@
   --radius-xl: 18px;
   --radius-2xl: 24px;
 
+  /* Native controls (date/time picker, autofill, scrollbars) */
+  color-scheme: light;
+
   /* Transitions */
   --transition-fast:   150ms cubic-bezier(0.4, 0, 0.2, 1);
   --transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
@@ -68,84 +88,95 @@
 }
 
 /* === DARK THEME === */
-/* Παλέτα ίδια με το driver app (client feedback 08/08): βαθύ navy φόντο, ΟΧΙ μαύρο —
-   και οι κάρτες παραμένουν ΑΣΠΡΕΣ (--bg-card) όπως εκεί. Το κείμενο μέσα στις κάρτες
-   γίνεται σκούρο μέσω του .card-surface override πιο κάτω, όχι εδώ. */
+/* Σχεδιασμένο ΩΣ dark UI, όχι «light με μαύρο φόντο» (αίτημα πελάτη 30/08):
+   βαθύ navy/graphite φόντο (ΟΧΙ μαύρο), κάρτες ένα σκαλί πιο ανοιχτές από το
+   φόντο ώστε να ξεχωρίζουν διακριτικά, ζεστό σαμπανιζέ χρυσό ΜΟΝΟ στα σημεία
+   δράσης, και off-white τυπογραφία. Τα περιγράμματα είναι blue/graphite —
+   χρυσό περίγραμμα παίρνει μόνο η κάρτα της νέας παραγγελίας.
+
+   ΑΛΛΑΓΗ ΣΕ ΣΧΕΣΗ ΜΕ ΠΡΙΝ: οι κάρτες ΔΕΝ είναι πια άσπρες. Το .card-surface
+   override από κάτω δεν γυρνάει πλέον σε light τιμές — κρατάει μόνο τις μικρές
+   διαφορές που κάνουν την κάρτα να δείχνει «ανασηκωμένη». */
 .dark {
-  /* 60% — Deep base surfaces */
-  --bg-primary:    #0B1020;
-  --bg-secondary:  #1B2338;
-  --bg-tertiary:   #222C44;
-  --bg-card:       #FFFFFF;
-  --bg-input:      #1B2338;
-  --bg-modal:      #1E1E2A;
+  /* Λέει στον browser να ζωγραφίσει ΤΑ ΔΙΚΑ ΤΟΥ controls σκούρα: επιλογέας ώρας,
+     autofill (αλλιώς κίτρινο), native scrollbars. */
+  color-scheme: dark;
 
-  /* 30% — Secondary */
-  --text-primary:   #F0EBE2;
-  --text-secondary: #A89C8E;
-  --text-muted:     #6B6058;
-  --border-default: #2A2520;
-  --border-subtle:  #221E1A;
-  --divider:        #252118;
+  /* 60% — Deep base surfaces (navy → graphite) */
+  --bg-primary:    #090E1A;   /* σελίδα */
+  --bg-secondary:  #111828;
+  --bg-tertiary:   #1B2334;   /* chips/badges μέσα στις κάρτες */
+  --bg-card:       #111828;   /* κάρτα: ένα σκαλί πιο φωτεινή από τη σελίδα */
+  --bg-input:      #0C1322;   /* πεδία: βυθισμένα σε σχέση με την κάρτα */
+  --bg-modal:      #131B2B;
 
-  /* 10% — Accent (slightly brighter gold for dark bg) */
-  --accent:         #D4A853;
-  --accent-hover:   #E2BA66;
-  --accent-light:   #2A2010;
-  --accent-muted:   rgba(212, 168, 83, 0.12);
+  /* 30% — Secondary (off-white τυπογραφία, ψυχρά γκρι περιγράμματα) */
+  --text-primary:   #EDF1F8;
+  --text-secondary: #AEB8CA;
+  --text-muted:     #8390A6;  /* αρκετά φωτεινό ώστε placeholders/labels να διαβάζονται */
+  --border-default: #26314A;
+  --border-subtle:  #1C2536;
+  --divider:        #202940;
 
-  /* Semantic colors */
-  --success:        #22C55E;
-  --success-bg:     rgba(34, 197, 94, 0.08);
-  --success-border: rgba(34, 197, 94, 0.20);
+  /* 10% — Accent (ζεστό σαμπανιζέ, αντίστοιχο του χρυσού του light) */
+  --accent:         #DFB975;
+  --accent-hover:   #EFCE8F;
+  --accent-light:   rgba(223, 185, 117, 0.22);  /* χρησιμοποιείται ως χρώμα περιγράμματος */
+  --accent-muted:   rgba(223, 185, 117, 0.13);
+  --on-accent:      #0E1626;   /* σκούρο navy κείμενο πάνω στο χρυσό */
+  --nav-icon:       #C6A876;   /* απαλότερο από το --accent, για να μην κλέβει την προσοχή */
+
+  --card-emphasis-border: rgba(223, 185, 117, 0.42);
+  --card-emphasis-shadow:
+      0 0 0 1px rgba(223, 185, 117, 0.07),
+      0 18px 44px -20px rgba(0, 0, 0, 0.95),
+      0 0 34px -14px rgba(223, 185, 117, 0.22);
+
+  /* Semantic colors — απαλές αποχρώσεις πάνω σε navy, χωρίς neon */
+  --success:        #4ADE80;
+  --success-bg:     rgba(74, 222, 128, 0.10);
+  --success-border: rgba(74, 222, 128, 0.24);
   --danger:         #F87171;
-  --danger-bg:      rgba(248, 113, 113, 0.08);
-  --danger-border:  rgba(248, 113, 113, 0.20);
+  --danger-bg:      rgba(248, 113, 113, 0.10);
+  --danger-border:  rgba(248, 113, 113, 0.26);
+  --danger-solid:   #C33540;
   --warning:        #FBBF24;
-  --warning-bg:     rgba(251, 191, 36, 0.08);
-  --info:           #60A5FA;
-  --info-bg:        rgba(96, 165, 250, 0.08);
-  --info-border:    rgba(96, 165, 250, 0.20);
+  --warning-bg:     rgba(251, 191, 36, 0.10);
+  --warning-border: rgba(251, 191, 36, 0.26);
+  --info:           #7FB2F7;
+  --info-bg:        rgba(127, 178, 247, 0.10);
+  --info-border:    rgba(127, 178, 247, 0.26);
 
-  /* Navbar */
-  --nav-bg:         rgba(22, 22, 22, 0.65);
-  --nav-border:     rgba(42, 37, 32, 0.40);
+  /* Navbar — ίδιο navy με τη σελίδα, ημιδιαφανές πάνω από το blur */
+  --nav-bg:         rgba(9, 14, 26, 0.78);
+  --nav-border:     rgba(38, 49, 74, 0.75);
 
-  /* Shadows */
-  --shadow-xs:  0 1px 2px rgba(0, 0, 0, 0.20);
-  --shadow-sm:  0 2px 8px rgba(0, 0, 0, 0.30), 0 1px 2px rgba(0, 0, 0, 0.20);
-  --shadow-md:  0 4px 16px rgba(0, 0, 0, 0.40), 0 2px 4px rgba(0, 0, 0, 0.20);
-  --shadow-lg:  0 8px 32px rgba(0, 0, 0, 0.50), 0 4px 8px rgba(0, 0, 0, 0.30);
-  --shadow-xl:  0 16px 48px rgba(0, 0, 0, 0.60), 0 8px 16px rgba(0, 0, 0, 0.40);
+  /* Shadows — βαθιές αλλά μαλακές, για διακριτικό depth */
+  --shadow-xs:  0 1px 2px rgba(0, 0, 0, 0.40);
+  --shadow-sm:  0 1px 2px rgba(0, 0, 0, 0.40), 0 2px 10px rgba(0, 0, 0, 0.28);
+  --shadow-md:  0 2px 6px rgba(0, 0, 0, 0.45), 0 10px 26px -8px rgba(0, 0, 0, 0.55);
+  --shadow-lg:  0 4px 10px rgba(0, 0, 0, 0.45), 0 18px 40px -12px rgba(0, 0, 0, 0.65);
+  --shadow-xl:  0 8px 18px rgba(0, 0, 0, 0.50), 0 30px 64px -16px rgba(0, 0, 0, 0.75);
 }
 
-/* Οι κάρτες (--bg-card) είναι ΑΣΠΡΕΣ και σε dark mode· ό,τι κείμενο/σύνορο ζει μέσα
-   τους πρέπει να διαβάζεται σε άσπρο φόντο, όχι στο navy. Αντί να αλλάξουμε ΚΑΘΕ
-   var(--text-*) ξεχωριστά σε κάθε component, ξαναορίζουμε τις ίδιες μεταβλητές
-   ΤΟΠΙΚΑ πάνω στη ρίζα κάθε κάρτας (className="card-surface") — τα παιδιά τις
-   κληρονομούν αυτόματα μέσω CSS cascade. Οι τιμές είναι ίδιες με το light theme.
-   Δεν αγγίζουμε το accent (μένει το φωτεινό χρυσό dark mode). */
+/* Οι κάρτες είναι πλέον σκούρες, οπότε δεν χρειάζεται να γυρίσουμε τίποτα σε light
+   τιμές. Κρατάμε μόνο τις μικρές διαφορές που κάνουν την κάρτα να «ανασηκώνεται»:
+   τα πεδία μέσα της μένουν πιο βυθισμένα και τα περιγράμματα λίγο πιο ορατά, αφού
+   πατάνε σε ανοιχτότερο φόντο από τη σελίδα. */
 .dark .card-surface {
-  --bg-tertiary:   #F1EDE6;
-  --bg-input:      #F4F0EB;
-  --text-primary:   #1E1A14;
-  --text-secondary: #5C5248;
-  --text-muted:     #8A7F74;
-  --border-default: #E5DED4;
-  --border-subtle:  #EDE7DF;
-  --divider:        #E8E1D8;
-  --accent-light:   #F5ECD9;
-  --success:        #16A34A;
-  --success-bg:     #F0FDF4;
-  --success-border: #BBF7D0;
-  --danger:         #DC2626;
-  --danger-bg:      #FEF2F2;
-  --danger-border:  #FECACA;
-  --warning:        #D97706;
-  --warning-bg:     #FFFBEB;
-  --info:           #2563EB;
-  --info-bg:        #EFF6FF;
-  --info-border:    #BFDBFE;
+  --border-default: #2B3752;
+  --border-subtle:  #202A3E;
+  --divider:        #232D42;
+}
+
+/* Απαλή, σχεδόν αόρατη διαβάθμιση στο φόντο: δίνει βάθος ώστε η σελίδα να μη
+   δείχνει επίπεδο μαύρο πανί. Fixed, για να μη «ταξιδεύει» με το scroll. */
+.dark body {
+  background-image:
+    radial-gradient(1100px 620px at 50% -240px, rgba(64, 88, 145, 0.18), transparent 68%),
+    radial-gradient(760px 460px at 100% -60px, rgba(223, 185, 117, 0.05), transparent 62%);
+  background-attachment: fixed;
+  background-repeat: no-repeat;
 }
 
 /* ============================================
@@ -350,3 +381,92 @@ body {
 .dark .hover-card-effect:hover {
   box-shadow: 0 16px 32px -4px rgba(0, 0, 0, 0.6), 0 0 0 1px var(--accent-muted);
 }
+
+/* ============================================
+   Dark theme — τελειώματα (ΜΟΝΟ dark)
+   ============================================ */
+
+/* Τίτλοι ενοτήτων: μικρή χρυσή υπογράμμιση, όπως στη σχεδιαστική αναφορά.
+   Μπαίνει μόνο στο dark — το light theme μένει ακριβώς όπως είναι. */
+.section-title { position: relative; }
+
+.dark .section-title::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: -9px;
+  width: 56px;
+  height: 3px;
+  border-radius: 99px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-hover));
+  opacity: 0.9;
+}
+
+/* ── Segmented controls (Τρόπος πληρωμής / Αποστολή στους διανομείς) ──
+   Το ενεργό κουμπί ήταν inline style με σταθερό λευκό κείμενο. Πέρασε σε κλάση
+   ώστε το dark να μπορεί να το αλλάξει χωρίς να πειραχτεί το light: οι τιμές
+   εδώ είναι ταυτόσημες με ό,τι έδειχνε πριν στο light theme. */
+.seg {
+  color: var(--text-secondary);
+  background-color: transparent;
+}
+
+.seg-active {
+  background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+  color: var(--on-accent);
+}
+
+/* Η απαλή χρυσή λάμψη υπήρχε μόνο στον επιλογέα πληρωμής — μένει εκεί στο light. */
+.seg-payment.seg-active {
+  box-shadow: 0 2px 8px var(--accent-muted);
+}
+
+.dark .seg-active {
+  box-shadow: 0 2px 12px -3px rgba(223, 185, 117, 0.38);
+}
+
+/* Στο dark, ο πλατύς επιλογέας πληρωμής γίνεται χρυσό ΠΕΡΙΓΡΑΜΜΑ αντί για γεμάτη
+   χρυσή πλάκα: μισή κάρτα σε συμπαγές χρυσό είναι υπερβολή, ενώ τα στενά pills
+   του χρόνου κρατούν το γεμάτο χρυσό ως έμφαση. Το inset shadow αντί για border
+   αποφεύγει μετατόπιση layout. */
+.dark .seg-payment.seg-active {
+  background: rgba(223, 185, 117, 0.10);
+  color: var(--accent);
+  box-shadow:
+    inset 0 0 0 1px rgba(223, 185, 117, 0.55),
+    0 4px 14px -6px rgba(223, 185, 117, 0.35);
+}
+
+/* Spinner πάνω σε χρυσό κουμπί: ακολουθεί το χρώμα του κειμένου, ώστε να μη μένει
+   λευκό όταν το κείμενο γίνεται σκούρο navy στο dark. */
+.spinner-on-accent {
+  border-color: color-mix(in srgb, currentColor 28%, transparent);
+  border-top-color: currentColor;
+}
+
+/* Το scrollbar σε navy φόντο */
+.dark ::-webkit-scrollbar-thumb {
+  background: #2B3752;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #3A4869;
+}
+
+/* Toasts (sonner): το προεπιλεγμένο dark του είναι σχεδόν μαύρο — το φέρνουμε στο
+   navy της εφαρμογής. ΜΟΝΟ τα ουδέτερα: τα success/error/warning κρατούν τα δικά
+   τους χρώματα (richColors), που είναι και η πληροφορία τους. */
+.dark [data-sonner-toast][data-type='normal'] {
+  background: var(--bg-modal);
+  border-color: var(--border-default);
+  color: var(--text-primary);
+}
+
+/* Ο browser βάζει από μόνος του placeholder στο 50% του χρώματος κειμένου — πάνω σε
+   navy βγαίνει θαμπό. Το ορίζουμε ρητά (μόνο dark) ώστε να μένει ευανάγνωστο. */
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: var(--text-muted);
+  opacity: 1;
+}
+
