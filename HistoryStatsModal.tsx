@@ -15,6 +15,8 @@ type CompletedOrder = {
   id: string;
   driver_id: string;
   created_at: string;
+  // Γεμίζει από release_due_orders() τη στιγμή scheduled→pending — βλ. παρακάτω.
+  activated_at: string | null;
   accepted_at: string;
   completed_at: string;
   address: string;
@@ -86,7 +88,7 @@ export default function HistoryStatsModal({ isOpen, onClose, storeId }: HistoryS
 
       const { data, error } = await supabase
         .from('orders')
-        .select(`id, driver_id, created_at, accepted_at, completed_at, address, payment_method, drivers(full_name)`)
+        .select(`id, driver_id, created_at, activated_at, accepted_at, completed_at, address, payment_method, drivers(full_name)`)
         .eq('store_id', storeId)
         .eq('status', 'completed')
         .gte('completed_at', startDate)
@@ -112,14 +114,39 @@ export default function HistoryStatsModal({ isOpen, onClose, storeId }: HistoryS
   // Στατιστικοί Υπολογισμοί
   const totalOrders = orders.length;
 
-  const totalDeliveryTime = orders.reduce((acc, order) => {
-    if (order.completed_at && order.accepted_at) {
-      return acc + differenceInMinutes(new Date(order.completed_at), new Date(order.accepted_at));
-    }
-    return acc;
-  }, 0);
+  // ΔΥΟ χρόνοι, γιατί μετρούν διαφορετικό πράγμα και τα καταστήματα τους σύγκριναν
+  // με το admin χωρίς να μπορούν να εξηγήσουν τη διαφορά (02/09):
+  //   • διανομή = από την αποδοχή έως την πόρτα — η καθαρή δουλειά του διανομέα
+  //   • σύνολο  = μαζί με την αναμονή μέχρι να τη βρει διανομέας (αυτό δείχνει το admin)
+  // Η διαφορά τους είναι ακριβώς ο χρόνος στο «Αναμονή για οδηγό».
+  //
+  // `activated_at ?? created_at`: για μια ΠΡΟΓΡΑΜΜΑΤΙΣΜΕΝΗ παραγγελία το created_at
+  // είναι η στιγμή που τη ζήτησε το κατάστημα, ώρες πριν σταλεί στους διανομείς —
+  // χωρίς το fallback ο συνολικός χρόνος θα μετρούσε και την ηθελημένη αναμονή.
+  const avg = (mins: number[]) =>
+    mins.length > 0 ? Math.round(mins.reduce((a, b) => a + b, 0) / mins.length) : 0;
 
-  const avgDeliveryTime = totalOrders > 0 ? Math.round(totalDeliveryTime / totalOrders) : 0;
+  const deliveryMinutesList = orders
+    .map((o) =>
+      o.completed_at && o.accepted_at
+        ? differenceInMinutes(new Date(o.completed_at), new Date(o.accepted_at))
+        : null
+    )
+    .filter((m): m is number => m !== null);
+
+  const totalMinutesList = orders
+    .map((o) =>
+      o.completed_at
+        ? differenceInMinutes(new Date(o.completed_at), new Date(o.activated_at || o.created_at))
+        : null
+    )
+    .filter((m): m is number => m !== null);
+
+  // Ο παρονομαστής είναι πλέον ΜΟΝΟ οι παραγγελίες που έχουν τον χρόνο: πριν
+  // διαιρούσαμε με το σύνολο ενώ αθροίζαμε μόνο τις έγκυρες, οπότε μία παραγγελία
+  // χωρίς accepted_at θα τραβούσε τον μέσο όρο ψευδώς προς τα κάτω.
+  const avgDeliveryTime = avg(deliveryMinutesList);
+  const avgTotalTime = avg(totalMinutesList);
 
   const ordersPerDriver: Record<string, number> = {};
   orders.forEach(order => {
@@ -291,7 +318,7 @@ export default function HistoryStatsModal({ isOpen, onClose, storeId }: HistoryS
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
                   {/* Total Orders */}
                   <div
-                    className="p-5 rounded-2xl flex items-center gap-4"
+                    className="p-5 rounded-2xl flex flex-col gap-3"
                     style={{
                       backgroundColor: 'var(--bg-tertiary)',
                       border: '1px solid var(--border-default)',
@@ -315,7 +342,7 @@ export default function HistoryStatsModal({ isOpen, onClose, storeId }: HistoryS
 
                   {/* Avg delivery */}
                   <div
-                    className="p-5 rounded-2xl flex items-center gap-4"
+                    className="p-5 rounded-2xl flex flex-col gap-3"
                     style={{
                       backgroundColor: 'var(--bg-tertiary)',
                       border: '1px solid var(--border-default)',
@@ -327,20 +354,29 @@ export default function HistoryStatsModal({ isOpen, onClose, storeId }: HistoryS
                     >
                       <Clock className="w-5 h-5" style={{ color: 'var(--success)' }} />
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--text-muted)' }}>
                         Μέσος Χρόνος
                       </p>
-                      <p className="text-3xl font-bold" style={{ color: 'var(--text-primary)' }}>
+                      <p className="text-3xl font-bold leading-none" style={{ color: 'var(--text-primary)' }}>
                         {avgDeliveryTime}
                         <span className="text-base font-normal ml-1" style={{ color: 'var(--text-muted)' }}>λεπτά</span>
+                      </p>
+                      {/* Χωρίς αυτή τη γραμμή το νούμερο δεν λέει από πού μετρά, και το
+                          κατάστημα το σύγκρινε με το admin (που μετρά από τη δημιουργία). */}
+                      <p className="text-[11px] mt-1" style={{ color: 'var(--text-muted)' }}>
+                        από την αποδοχή έως την πόρτα
+                      </p>
+                      <p className="text-[11px] font-semibold flex items-center gap-1 mt-0.5" style={{ color: 'var(--info)' }}>
+                        <Clock className="w-3 h-3 shrink-0" />
+                        Σύνολο {avgTotalTime}′ με την αναμονή
                       </p>
                     </div>
                   </div>
 
                   {/* Top driver */}
                   <div
-                    className="p-5 rounded-2xl flex items-center gap-4"
+                    className="p-5 rounded-2xl flex flex-col gap-3"
                     style={{
                       backgroundColor: 'var(--bg-tertiary)',
                       border: '1px solid var(--border-default)',
