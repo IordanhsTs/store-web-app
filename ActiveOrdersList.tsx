@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useActiveOrders, type Order } from './useActiveOrders';
 // Το εικονίδιο «Map» του lucide μετονομάζεται: αλλιώς σκιάζει τον global Map constructor.
-import { Clock, Map as MapIcon, XCircle, User, MessageSquare, Package, Phone, Route, Timer } from 'lucide-react';
+import { Clock, Map as MapIcon, XCircle, User, MessageSquare, Package, Phone, Route, Timer, Bike } from 'lucide-react';
 import { differenceInMinutes } from 'date-fns';
 import { toast } from 'sonner';
 import DriverMapInline from './DriverMapInline';
@@ -139,6 +139,13 @@ export default function ActiveOrdersList({ storeId }: { storeId: string }) {
           const isPending = order.status === 'pending';
           const isScheduled = order.status === 'scheduled';
           const isLate = isPending && minutesElapsed > 9;
+          // Πόση ώρα είναι αποδεκτή η παραγγελία από τον διανομέα. Το `accepted_at`
+          // γράφεται από το κινητό του διανομέα ενώ το `activated_at` από τον Postgres:
+          // μια απόκλιση ρολογιού λίγων δευτερολέπτων έβγαζε «-1 λεπτά» — εξ ου το max(0).
+          const acceptedMinutes = order.accepted_at
+            ? Math.max(0, differenceInMinutes(now, new Date(order.accepted_at)))
+            : null;
+          const showAccepted = order.status === 'accepted' && acceptedMinutes !== null;
           const remainingMs = order.scheduled_at
             ? new Date(order.scheduled_at).getTime() - now.getTime()
             : 0;
@@ -218,28 +225,46 @@ export default function ActiveOrdersList({ storeId }: { storeId: string }) {
                     </div>
                   </div>
 
-                  {/* Time badge — αντίστροφη μέτρηση για τις προγραμματισμένες */}
-                  <div
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-semibold shrink-0 tabular-nums"
-                    style={
-                      isScheduled
-                        ? { backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-secondary)', border: '1px solid var(--border-default)' }
-                        : isLate
-                        ? { backgroundColor: 'var(--danger-bg)', color: 'var(--danger)', border: '1px solid var(--danger-border)' }
-                        : { backgroundColor: 'var(--success-bg)', color: 'var(--success)', border: '1px solid var(--success-border)' }
-                    }
-                  >
-                    {isScheduled ? (
-                      <>
-                        <Timer className="w-3.5 h-3.5" />
-                        {formatCountdown(remainingMs)}
-                      </>
-                    ) : (
-                      <>
-                        <Clock className="w-3.5 h-3.5" />
-                        {minutesElapsed} λεπτά
-                      </>
-                    )}
+                  {/* Time badge — αντίστροφη μέτρηση για τις προγραμματισμένες.
+                      Όταν η παραγγελία είναι αποδεκτή μπαίνει ΚΑΙ ο χρόνος από την
+                      αποδοχή: ο συνολικός χρόνος μόνος του δεν λέει στο κατάστημα αν
+                      ο διανομέας μόλις την πήρε ή αν την κρατά ήδη 20 λεπτά. */}
+                  {/* Σε στενή οθόνη τα δύο badges στοιβάζονται: δίπλα-δίπλα δεν άφηναν
+                      ούτε ένα pixel στη διεύθυνση (shrink-0) και αυτή εξαφανιζόταν. */}
+                  <div className="flex flex-col items-end gap-1 shrink-0 sm:flex-row sm:items-center sm:gap-1.5">
+                      <div
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-semibold tabular-nums"
+                        style={
+                          isScheduled
+                            ? { backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-secondary)', border: '1px solid var(--border-default)' }
+                            : isLate
+                            ? { backgroundColor: 'var(--danger-bg)', color: 'var(--danger)', border: '1px solid var(--danger-border)' }
+                            : { backgroundColor: 'var(--success-bg)', color: 'var(--success)', border: '1px solid var(--success-border)' }
+                        }
+                      >
+                        {isScheduled ? (
+                          <>
+                            <Timer className="w-3.5 h-3.5" />
+                            {formatCountdown(remainingMs)}
+                          </>
+                        ) : (
+                          <>
+                            <Clock className="w-3.5 h-3.5" />
+                            {showAccepted ? `Σύνολο ${minutesElapsed}′` : `${minutesElapsed} λεπτά`}
+                          </>
+                        )}
+                      </div>
+
+                      {showAccepted && (
+                        <div
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-semibold tabular-nums"
+                          style={{ backgroundColor: 'var(--info-bg)', color: 'var(--info)', border: '1px solid var(--info-border)' }}
+                          title="Πόση ώρα την έχει αναλάβει ο διανομέας"
+                        >
+                          <Bike className="w-3.5 h-3.5" />
+                          {`${acceptedMinutes}′`}
+                        </div>
+                      )}
                   </div>
                 </div>
 
