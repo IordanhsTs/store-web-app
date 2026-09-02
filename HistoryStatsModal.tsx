@@ -362,12 +362,9 @@ export default function HistoryStatsModal({ isOpen, onClose, storeId }: HistoryS
                         {avgDeliveryTime}
                         <span className="text-base font-normal ml-1" style={{ color: 'var(--text-muted)' }}>λεπτά</span>
                       </p>
-                      {/* Χωρίς αυτή τη γραμμή το νούμερο δεν λέει από πού μετρά, και το
-                          κατάστημα το σύγκρινε με το admin (που μετρά από τη δημιουργία). */}
-                      <p className="text-[11px] mt-1" style={{ color: 'var(--text-muted)' }}>
-                        από την αποδοχή έως την πόρτα
-                      </p>
-                      <p className="text-[11px] font-semibold flex items-center gap-1 mt-0.5" style={{ color: 'var(--info)' }}>
+                      {/* Ο δεύτερος χρόνος: χωρίς αυτόν το νούμερο δεν εξηγεί τη διαφορά
+                          από το admin, που μετρά από τη δημιουργία. */}
+                      <p className="text-[11px] font-semibold flex items-center gap-1 mt-1.5" style={{ color: 'var(--info)' }}>
                         <Clock className="w-3 h-3 shrink-0" />
                         Σύνολο {avgTotalTime}′ με την αναμονή
                       </p>
