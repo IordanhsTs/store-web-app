@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { supabase, getTenantSchema } from './lib/supabase';
+import { liveChannel } from './lib/live';
 
 export type SystemLoad = 'quiet' | 'moderate' | 'busy' | 'very_busy';
 
@@ -40,15 +41,23 @@ export function useSystemLoad() {
       timerRef.current = setTimeout(fetchCount, REFRESH_DEBOUNCE_MS);
     };
 
-    const channel = supabase
-      .channel('system_load_counter')
-      .on('postgres_changes', { event: '*', schema: getTenantSchema(), table: 'orders' }, scheduleRefresh)
-      .subscribe();
+    const stopChannel = liveChannel({
+      name: 'system_load_counter',
+      // Σε κάθε επανασύνδεση ξαναμετράμε: όσο το κανάλι ήταν πεσμένο ο φόρτος
+      // μπορεί να άλλαξε τελείως χωρίς να φτάσει ούτε ένα event.
+      onResync: scheduleRefresh,
+      bind: (channel) =>
+        channel.on(
+          'postgres_changes',
+          { event: '*', schema: getTenantSchema(), table: 'orders' },
+          scheduleRefresh
+        ),
+    });
 
     return () => {
       cancelled = true;
       if (timerRef.current) clearTimeout(timerRef.current);
-      supabase.removeChannel(channel);
+      stopChannel();
     };
   }, []);
 

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Bell, CheckCircle2 } from 'lucide-react';
 import { supabase, getTenantSchema } from './lib/supabase';
+import { liveChannel } from './lib/live';
 import { alertDialog } from './ConfirmDialog';
 
 export default function SystemAlertListener({ storeId }: { storeId: string }) {
@@ -13,43 +14,48 @@ export default function SystemAlertListener({ storeId }: { storeId: string }) {
     // ήχος παραγγελίας, ώστε το κατάστημα να ξεχωρίζει τι ήρθε.
     const alertSound = new Audio('/message.wav');
 
-    const channel = supabase
-      .channel('system_alerts')
-      .on('broadcast', { event: 'admin_message' }, (payload) => {
-        const data = payload.payload;
-        if (!data) return;
+    // ΠΡΟΣΟΧΗ: unique:false — σε broadcast το όνομα ΕΙΝΑΙ η διεύθυνση και πρέπει να
+    // ταιριάζει ακριβώς με αυτό που στέλνει το admin ('system_alerts').
+    const stopAlerts = liveChannel({
+      name: 'system_alerts',
+      unique: false,
+      bind: (channel) =>
+        channel.on('broadcast', { event: 'admin_message' }, (payload) => {
+          const data = payload.payload;
+          if (!data) return;
 
-        // Check if the message is for this store
-        if (data.target_type === 'store') {
-          const targets = Array.isArray(data.target_ids) ? data.target_ids : [data.target_id];
-          if (targets.includes('all') || targets.includes(storeId)) {
-            setAlertMessage(data.message);
-            // Ήχος μόνο αν ο χρήστης δεν έχει σιγάσει τις ειδοποιήσεις (κουμπί στο Navbar)
-            let soundEnabled = true;
-            try { soundEnabled = localStorage.getItem('soundEnabled') !== 'false'; } catch {}
-            if (soundEnabled) {
-              alertSound.currentTime = 0;
-              alertSound.play().catch(e => console.log('Audio play blocked:', e));
+          // Check if the message is for this store
+          if (data.target_type === 'store') {
+            const targets = Array.isArray(data.target_ids) ? data.target_ids : [data.target_id];
+            if (targets.includes('all') || targets.includes(storeId)) {
+              setAlertMessage(data.message);
+              // Ήχος μόνο αν ο χρήστης δεν έχει σιγάσει τις ειδοποιήσεις (κουμπί στο Navbar)
+              let soundEnabled = true;
+              try { soundEnabled = localStorage.getItem('soundEnabled') !== 'false'; } catch {}
+              if (soundEnabled) {
+                alertSound.currentTime = 0;
+                alertSound.play().catch(e => console.log('Audio play blocked:', e));
+              }
             }
           }
-        }
-      })
-      .subscribe();
+        }),
+    });
 
-    const statusChannel = supabase
-      .channel(`store_status_${storeId}`)
-      .on('postgres_changes', { event: 'UPDATE', schema: getTenantSchema(), table: 'stores', filter: `id=eq.${storeId}` }, async (payload) => {
-        if (payload.new && payload.new.is_blocked === true) {
-          await alertDialog('Η πρόσβαση στο λογαριασμό σας έχει διακοπεί από το διαχειριστή.', { danger: true, title: 'Αποκλεισμός Λογαριασμού' });
-          await supabase.auth.signOut();
-          window.location.replace('/login');
-        }
-      })
-      .subscribe();
+    const stopStatus = liveChannel({
+      name: `store_status_${storeId}`,
+      bind: (channel) =>
+        channel.on('postgres_changes', { event: 'UPDATE', schema: getTenantSchema(), table: 'stores', filter: `id=eq.${storeId}` }, async (payload) => {
+          if (payload.new && payload.new.is_blocked === true) {
+            await alertDialog('Η πρόσβαση στο λογαριασμό σας έχει διακοπεί από το διαχειριστή.', { danger: true, title: 'Αποκλεισμός Λογαριασμού' });
+            await supabase.auth.signOut();
+            window.location.replace('/login');
+          }
+        }),
+    });
 
     return () => {
-      supabase.removeChannel(channel);
-      supabase.removeChannel(statusChannel);
+      stopAlerts();
+      stopStatus();
     };
   }, [storeId]);
 

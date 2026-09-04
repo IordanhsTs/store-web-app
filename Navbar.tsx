@@ -8,6 +8,7 @@ import ContactAdminModal from './ContactAdminModal';
 import { useRouter } from 'next/navigation';
 import { useSystemLoad } from './useSystemLoad';
 import { supabase } from './lib/supabase';
+import { forceWake } from './lib/live';
 
 // Το κατάστημα ΔΕΝ μαθαίνει ΠΟΤΕ σε ποιο backend τρέχουμε (απόφαση πελάτη,
 // 28/08/2026): ούτε ένδειξη στο Navbar, ούτε μπάρα «εφεδρική λειτουργία». Είναι
@@ -131,9 +132,13 @@ export default function Navbar({ storeId, storeName }: { storeId: string; storeN
 
             {/* Brand & Store Name */}
             <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+              {/* Το router.refresh() ξαναφέρνει ΜΟΝΟ τα server components — η λίστα
+                  παραγγελιών ζει στον client. Το forceWake() φρεσκάρει session,
+                  κανάλια και δεδομένα, δηλαδή ό,τι πραγματικά περιμένει ο χρήστης
+                  πατώντας «Ανανέωση». */}
               <button
                 type="button"
-                onClick={() => router.refresh()}
+                onClick={() => { forceWake(); router.refresh(); }}
                 className="flex items-center gap-2.5 cursor-pointer transition-opacity hover:opacity-80 active:opacity-60"
                 title="Ανανέωση σελίδας"
               >

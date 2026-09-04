@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { supabase, getTenantSchema } from './lib/supabase';
+import { liveChannel } from './lib/live';
 
 export type Order = {
   id: string;
@@ -28,9 +29,14 @@ export type Order = {
   } | null;
 };
 
-// Πόσο συχνά ζητάμε από τη βάση να «απελευθερώσει» τις προγραμματισμένες
-// παραγγελίες που έφτασε η ώρα τους (scheduled → pending).
-const RELEASE_POLL_MS = 15000;
+// Ένα «χτύπημα» ανά 15 δευτερόλεπτα κάνει ΔΥΟ δουλειές:
+//   1. ζητά από τη βάση να «απελευθερώσει» τις προγραμματισμένες παραγγελίες που
+//      έφτασε η ώρα τους (scheduled → pending),
+//   2. ξαναδιαβάζει τη λίστα — το δίχτυ ασφαλείας για καρτέλες που μένουν ώρες
+//      ανοιχτές: αν το realtime έχει πέσει σιωπηλά (βλ. lib/live.ts), η κάρτα
+//      ενημερώνεται ούτως ή άλλως και ο ήχος αποδοχής παίζει κανονικά, αφού τον
+//      ελέγχει το fetchOrders και όχι το event.
+const SYNC_POLL_MS = 15000;
 
 export function useActiveOrders(storeId: string) {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -39,9 +45,13 @@ export function useActiveOrders(storeId: string) {
   // της αποδοχής και όχι σε κάθε άσχετο update της ίδιας παραγγελίας.
   const acceptedSeen = useRef<Set<string>>(new Set());
   const firstLoad = useRef(true);
+  // Υπογραφή της τελευταίας λίστας. Με poll ανά 15" τα περισσότερα διαβάσματα
+  // γυρνούν ό,τι έχουμε ήδη — χωρίς αυτό θα κάναμε re-render στο τίποτα.
+  const signature = useRef('');
 
   useEffect(() => {
     if (!storeId) return;
+    let cancelled = false;
 
     const playSound = () => {
       try {
@@ -63,6 +73,8 @@ export function useActiveOrders(storeId: string) {
         .in('status', ['scheduled', 'pending', 'accepted'])
         .order('created_at', { ascending: true });
 
+      if (cancelled) return;
+
       if (!error && data) {
         const list = data as Order[];
 
@@ -77,7 +89,11 @@ export function useActiveOrders(storeId: string) {
         acceptedSeen.current = new Set(nowAccepted);
         firstLoad.current = false;
 
-        setOrders(list);
+        const next = JSON.stringify(list);
+        if (next !== signature.current) {
+          signature.current = next;
+          setOrders(list);
+        }
       }
       setLoading(false);
     };
@@ -91,41 +107,49 @@ export function useActiveOrders(storeId: string) {
       try { await supabase.rpc('release_due_orders'); } catch {}
     };
     releaseDue();
-    const releaseTimer = setInterval(releaseDue, RELEASE_POLL_MS);
+    const syncTimer = setInterval(async () => {
+      await releaseDue();
+      if (!cancelled) fetchOrders();
+    }, SYNC_POLL_MS);
 
-    // 2. Subscribe to real-time changes
-    const channelId = `active_orders_updates_${storeId}_${Math.random().toString(36).substring(7)}`;
-    const channel = supabase
-      .channel(channelId)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: getTenantSchema(),
-          table: 'orders',
-          filter: `store_id=eq.${storeId}`,
-        },
-        (payload) => {
-          if (payload.eventType === 'UPDATE') {
-            const updatedOrder = payload.new as Partial<Order>;
-            if (updatedOrder.status === 'completed' || updatedOrder.status === 'cancelled') {
-              setOrders((prev) => prev.filter((o) => o.id !== updatedOrder.id));
+    // 2. Subscribe to real-time changes — μέσω liveChannel, ώστε να ξαναχτίζεται
+    // μόνο του όταν πέσει και να ξαναδιαβάζει τη λίστα σε κάθε επανασύνδεση.
+    const stopChannel = liveChannel({
+      name: `active_orders_updates_${storeId}`,
+      onResync: fetchOrders,
+      bind: (channel) =>
+        channel.on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: getTenantSchema(),
+            table: 'orders',
+            filter: `store_id=eq.${storeId}`,
+          },
+          (payload) => {
+            if (payload.eventType === 'UPDATE') {
+              const updatedOrder = payload.new as Partial<Order>;
+              if (updatedOrder.status === 'completed' || updatedOrder.status === 'cancelled') {
+                signature.current = '';
+                setOrders((prev) => prev.filter((o) => o.id !== updatedOrder.id));
+                return;
+              }
+            } else if (payload.eventType === 'DELETE') {
+              signature.current = '';
+              setOrders((prev) => prev.filter((o) => o.id !== payload.old?.id));
               return;
             }
-          } else if (payload.eventType === 'DELETE') {
-            setOrders((prev) => prev.filter((o) => o.id !== payload.old?.id));
-            return;
+            // Κάθε άλλη περίπτωση (INSERT / UPDATE που μένει ενεργή) → επαναφόρτωση,
+            // η οποία αναλαμβάνει και τον ήχο αποδοχής.
+            fetchOrders();
           }
-          // Κάθε άλλη περίπτωση (INSERT / UPDATE που μένει ενεργή) → επαναφόρτωση,
-          // η οποία αναλαμβάνει και τον ήχο αποδοχής.
-          fetchOrders();
-        }
-      )
-      .subscribe();
+        ),
+    });
 
     return () => {
-      clearInterval(releaseTimer);
-      supabase.removeChannel(channel);
+      cancelled = true;
+      clearInterval(syncTimer);
+      stopChannel();
     };
   }, [storeId]);
 
@@ -141,40 +165,41 @@ export function useActiveOrders(storeId: string) {
   useEffect(() => {
     if (!driverIdsKey) return;
 
-    const driverChannelId = `active_drivers_updates_${storeId}_${Math.random().toString(36).substring(7)}`;
-    const driverChannel = supabase
-      .channel(driverChannelId)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: getTenantSchema(),
-          table: 'drivers',
-          filter: `id=in.(${driverIdsKey})`,
-        },
-        (payload) => {
-          const updatedDriver = payload.new;
-          setOrders((prev) =>
-            prev.map((order) => {
-              if (order.driver_id === updatedDriver.id && order.drivers) {
-                return {
-                  ...order,
-                  drivers: {
-                    ...order.drivers,
-                    latitude: updatedDriver.latitude,
-                    longitude: updatedDriver.longitude,
-                  },
-                };
-              }
-              return order;
-            })
-          );
-        }
-      )
-      .subscribe();
+    const stopDriverChannel = liveChannel({
+      name: `active_drivers_updates_${storeId}`,
+      bind: (channel) =>
+        channel.on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: getTenantSchema(),
+            table: 'drivers',
+            filter: `id=in.(${driverIdsKey})`,
+          },
+          (payload) => {
+            const updatedDriver = payload.new;
+            signature.current = '';
+            setOrders((prev) =>
+              prev.map((order) => {
+                if (order.driver_id === updatedDriver.id && order.drivers) {
+                  return {
+                    ...order,
+                    drivers: {
+                      ...order.drivers,
+                      latitude: updatedDriver.latitude,
+                      longitude: updatedDriver.longitude,
+                    },
+                  };
+                }
+                return order;
+              })
+            );
+          }
+        ),
+    });
 
     return () => {
-      supabase.removeChannel(driverChannel);
+      stopDriverChannel();
     };
   }, [storeId, driverIdsKey]);
 
