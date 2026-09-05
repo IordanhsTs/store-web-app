@@ -15,7 +15,10 @@ import {
 const ACTIVE_CACHE_KEY = 'vertex-active-backend';
 const TENANT_KEY = 'vertex-tenant';   // MULTI-TENANT: το schema της εταιρίας του χρήστη
 const CHECK_INTERVAL_MS = 30000;
-const FAILURES_BEFORE_SWITCH = 2;
+const FAILURES_BEFORE_SWITCH = 3;
+// Οι browsers στραγγαλίζουν τα setInterval σε καρτέλα που δεν είναι μπροστά: δύο
+// «συνεχόμενες» αποτυχίες μπορεί να απέχουν ώρες. Ξεχνάμε ό,τι είναι παλιό.
+const FAILURE_MEMORY_MS = 5 * 60 * 1000;
 
 function savedIndex(): number {
   if (typeof window === 'undefined') return 0;
@@ -95,31 +98,55 @@ function switchTo(index: number, reason: string) {
 }
 
 let consecutiveFailures = 0;
+let lastFailureAt = 0;
 
 async function tick() {
+  // 0) Αν η ΙΔΙΑ η συσκευή είναι εκτός δικτύου, δεν κρίνουμε κανένα backend:
+  //    κάθε αίτημα θα σκάσει και θα κατηγορούσαμε άδικα το κύριο.
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+
   // 1) Κεντρική εντολή (Cloudflare Worker) — όλοι οι clients συμφωνούν.
   const desired = await readRemoteConfig();
   if (desired) {
     const idx = desired === 'standby' ? 1 : 0;
+    consecutiveFailures = 0;
     if (idx !== activeIndex) switchTo(idx, 'κεντρική εντολή');
+    return;
+  }
+
+  // 2) Ο τροχονόμος δεν απαντά. Ελέγχουμε ΚΑΙ ΤΑ ΔΥΟ backends ΤΑΥΤΟΧΡΟΝΑ.
+  //    Ήταν το βασικό λάθος: παλιότερα μετρούσαμε αποτυχίες του ενεργού backend
+  //    σε άλλη στιγμή από τον έλεγχο του άλλου. Μια συσκευή που ξυπνούσε με νεκρό
+  //    δίκτυο μάζευε 2 «αποτυχίες» και μετά — με το δίκτυο πια ζωντανό — έβρισκε
+  //    το εφεδρικό υγιές και γύριζε εκεί, χωρίς να έχει πέσει τίποτα. Από κει και
+  //    πέρα το κατάστημα καταχωρούσε παραγγελίες σε λάθος βάση.
+  const other = activeIndex === 0 ? 1 : 0;
+  const [activeOk, otherOk] = await Promise.all([
+    isHealthy(BACKENDS[activeIndex]),
+    BACKENDS[other] ? isHealthy(BACKENDS[other]) : Promise.resolve(false),
+  ]);
+
+  if (activeOk) {
     consecutiveFailures = 0;
     return;
   }
-  // 2) Fallback: τοπικός έλεγχος υγείας.
-  if (await isHealthy(BACKENDS[activeIndex])) {
+  if (!otherOk) {           // έπεσαν και τα δύο → δικό μας δίκτυο, δεν αλλάζουμε τίποτα
     consecutiveFailures = 0;
     return;
   }
+
+  const now = Date.now();
+  if (now - lastFailureAt > FAILURE_MEMORY_MS) consecutiveFailures = 0;
+  lastFailureAt = now;
   consecutiveFailures += 1;
+
   if (consecutiveFailures >= FAILURES_BEFORE_SWITCH) {
-    const other = activeIndex === 0 ? 1 : 0;
-    if (BACKENDS[other] && (await isHealthy(BACKENDS[other]))) {
-      switchTo(other, 'το ενεργό backend δεν αποκρίνεται');
-    }
+    switchTo(other, 'το ενεργό backend δεν αποκρίνεται');
   }
 }
 
 if (typeof window !== 'undefined' && BACKENDS.length > 1) {
+  tick();                   // ΑΜΕΣΩΣ, όχι σε 30 δευτ. — η αποθηκευμένη επιλογή μπορεί να είναι λάθος
   setInterval(tick, CHECK_INTERVAL_MS);
   window.addEventListener('online', tick);
   // Οι browsers περιορίζουν τα setInterval σε ανενεργές καρτέλες· ξανα-ελέγχουμε

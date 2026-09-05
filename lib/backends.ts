@@ -37,32 +37,43 @@ export const CONFIG_URLS = (process.env.NEXT_PUBLIC_FAILOVER_CONFIG_URLS || '')
 // να επιβιώνει τη μετάβαση primary <-> standby (κοινό JWT secret).
 export const AUTH_COOKIE_NAME = 'vertex-auth';
 
-const FETCH_TIMEOUT_MS = 3000;
+// ΤΑ 3 ΔΕΥΤΕΡΟΛΕΠΤΑ ΗΤΑΝ ΛΙΓΑ ΓΙΑ ΦΥΛΛΟΜΕΤΡΗΤΗ (05/09/2026): σε κινητό ή ταμπλέτ
+// που ξυπνά από ύπνο, το πρώτο αίτημα αργεί κανονικά 3-6 δευτ. Έτσι ένα υγιέστατο
+// primary «έπεφτε» και η συσκευή γύριζε μόνη της στο εφεδρικό. Ο server (Vercel)
+// κρατά τα σφιχτά 3 δευτ. — εκεί το δίκτυο δεν κοιμάται και η καθυστέρηση μετράει.
+export const SERVER_TIMEOUT_MS = 3000;
+export const HEALTH_TIMEOUT_MS = 6000;
+export const CONFIG_TIMEOUT_MS = 8000;
 
-function fetchWithTimeout(url: string, options: RequestInit = {}) {
+function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = HEALTH_TIMEOUT_MS) {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   return fetch(url, { ...options, signal: controller.signal, cache: 'no-store' }).finally(
     () => clearTimeout(timer)
   );
 }
 
-export async function isHealthy(backend: Backend): Promise<boolean> {
+export async function isHealthy(
+  backend: Backend,
+  timeoutMs = HEALTH_TIMEOUT_MS
+): Promise<boolean> {
   try {
     const res = await fetchWithTimeout(`${backend.url}/auth/v1/health`, {
       headers: { apikey: backend.anonKey },
-    });
+    }, timeoutMs);
     return res.ok;
   } catch {
     return false;
   }
 }
 
-export async function readRemoteConfig(): Promise<'primary' | 'standby' | null> {
+export async function readRemoteConfig(
+  timeoutMs = CONFIG_TIMEOUT_MS
+): Promise<'primary' | 'standby' | null> {
   for (const base of CONFIG_URLS) {
     try {
       const sep = base.includes('?') ? '&' : '?';
-      const res = await fetchWithTimeout(`${base}${sep}t=${Date.now()}`);
+      const res = await fetchWithTimeout(`${base}${sep}t=${Date.now()}`, {}, timeoutMs);
       if (res.ok) {
         const cfg = await res.json();
         if (cfg && (cfg.active === 'primary' || cfg.active === 'standby')) {
