@@ -123,13 +123,22 @@ export default function HistoryStatsModal({ isOpen, onClose, storeId }: HistoryS
   // `activated_at ?? created_at`: για μια ΠΡΟΓΡΑΜΜΑΤΙΣΜΕΝΗ παραγγελία το created_at
   // είναι η στιγμή που τη ζήτησε το κατάστημα, ώρες πριν σταλεί στους διανομείς —
   // χωρίς το fallback ο συνολικός χρόνος θα μετρούσε και την ηθελημένη αναμονή.
+  // ΕΝΑ ΔΕΚΑΔΙΚΟ, ΚΑΙ ΣΤΡΟΓΓΥΛΟΠΟΙΗΣΗ ΜΟΝΟ ΣΤΟ ΤΕΛΟΣ (06/09/2026): το
+  // differenceInMinutes κόβει τα δευτερόλεπτα ΚΑΘΕ παραγγελίας χωριστά, οπότε ο
+  // μέσος όρος έβγαινε συστηματικά ~30 δευτερόλεπτα χαμηλότερος. Το ίδιο
+  // διορθώθηκε στα Στατιστικά του admin και στην εφαρμογή του διανομέα — τα τρία
+  // νούμερα πρέπει να λένε το ίδιο πράγμα.
   const avg = (mins: number[]) =>
-    mins.length > 0 ? Math.round(mins.reduce((a, b) => a + b, 0) / mins.length) : 0;
+    mins.length > 0 ? (mins.reduce((a, b) => a + b, 0) / mins.length).toFixed(1) : '0.0';
+
+  /** Λεπτά με δεκαδικά — χωρίς το κόψιμο που κάνει το differenceInMinutes. */
+  const minutesBetween = (from: string, to: string) =>
+    Math.max(0, (new Date(to).getTime() - new Date(from).getTime()) / 60000);
 
   const deliveryMinutesList = orders
     .map((o) =>
       o.completed_at && o.accepted_at
-        ? differenceInMinutes(new Date(o.completed_at), new Date(o.accepted_at))
+        ? minutesBetween(o.accepted_at, o.completed_at)
         : null
     )
     .filter((m): m is number => m !== null);
@@ -137,7 +146,7 @@ export default function HistoryStatsModal({ isOpen, onClose, storeId }: HistoryS
   const totalMinutesList = orders
     .map((o) =>
       o.completed_at
-        ? differenceInMinutes(new Date(o.completed_at), new Date(o.activated_at || o.created_at))
+        ? minutesBetween(o.activated_at || o.created_at, o.completed_at)
         : null
     )
     .filter((m): m is number => m !== null);
