@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireUser } from '../../../lib/api-auth';
 import { haversineKm, MAX_DISTANCE_KM } from '../../../lib/distance';
 
 // ── Geoapify Routing proxy — ΠΡΑΓΜΑΤΙΚΗ οδική απόσταση κατάστημα → διεύθυνση ──
@@ -40,6 +41,9 @@ function parsePoint(raw: string | null): { lat: number; lon: number } | null {
 const round4 = (n: number) => n.toFixed(4);
 
 export async function GET(req: NextRequest) {
+  const guard = await requireUser();
+  if (!guard.ok) return guard.response;
+
   const from = parsePoint(req.nextUrl.searchParams.get('from'));
   const to = parsePoint(req.nextUrl.searchParams.get('to'));
   if (!from || !to) {

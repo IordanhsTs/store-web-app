@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireUser } from '../../../lib/api-auth';
 import { getGoogleApiKey, googlePlaceDetails } from '../../../lib/google-places';
 import { readCachedPlace, writeCachedPlace, type CachedPlace } from '../../../lib/place-cache';
 
@@ -41,6 +42,9 @@ async function fallbackFromCache(placeId: string): Promise<unknown | null> {
 }
 
 export async function GET(req: NextRequest) {
+  const guard = await requireUser();
+  if (!guard.ok) return guard.response;
+
   const placeId = (req.nextUrl.searchParams.get('placeId') || '').trim();
   const sessionToken = (req.nextUrl.searchParams.get('session') || '').trim();
   if (!placeId) {
