@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useActiveOrders, type Order } from './useActiveOrders';
 // Το εικονίδιο «Map» του lucide μετονομάζεται: αλλιώς σκιάζει τον global Map constructor.
-import { Clock, Map as MapIcon, XCircle, User, MessageSquare, Package, Phone, Route, Timer, Bike } from 'lucide-react';
+import { Clock, Map as MapIcon, XCircle, User, MessageSquare, Package, Phone, Route, Timer, Bike, Send } from 'lucide-react';
 import { differenceInMinutes } from 'date-fns';
 import { toast } from 'sonner';
 import DriverMapInline from './DriverMapInline';
@@ -41,6 +41,18 @@ export default function ActiveOrdersList({ storeId }: { storeId: string }) {
       toast.success('Η παραγγελία ακυρώθηκε.');
     } else {
       toast.error('Αποτυχία ακύρωσης. Δοκιμάστε ξανά.');
+    }
+  };
+
+  // Η παραγγελία ετοιμάστηκε πριν την ώρα που είχε ορίσει το κατάστημα:
+  // ενεργοποίηση τώρα (scheduled → pending), ίδιο push στους διανομείς όπως
+  // όταν λήγει κανονικά το ρολόι της (βλ. migration 0041 + trigger του 0040).
+  const handleSendNow = async (orderId: string) => {
+    const { error } = await supabase.rpc('activate_order_now', { p_order_id: orderId });
+    if (!error) {
+      toast.success('Η παραγγελία στάλθηκε στους διανομείς.');
+    } else {
+      toast.error('Αποτυχία αποστολής. Δοκιμάστε ξανά.');
     }
   };
 
@@ -283,24 +295,39 @@ export default function ActiveOrdersList({ storeId }: { storeId: string }) {
                 <div className="my-3" style={{ borderTop: '1px solid var(--border-subtle)' }} />
 
                 {/* Bottom row */}
-                <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
                   {isScheduled ? (
                     <>
                       <span className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
                         🕒 Θα σταλεί στους διανομείς σε {formatCountdown(remainingMs)}
                       </span>
-                      <button
-                        onClick={() => handleCancel(order.id)}
-                        className="flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-lg transition-all duration-150 shrink-0"
-                        style={{
-                          color: 'var(--danger)',
-                          backgroundColor: 'transparent',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        <XCircle className="w-4 h-4" />
-                        Ακύρωση
-                      </button>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          onClick={() => handleSendNow(order.id)}
+                          className="flex items-center gap-1.5 text-sm font-bold px-3 py-1.5 rounded-lg transition-all duration-150"
+                          style={{
+                            color: 'var(--on-accent)',
+                            background: 'linear-gradient(135deg, var(--accent), var(--accent-hover))',
+                            cursor: 'pointer',
+                          }}
+                          title="Η παραγγελία είναι έτοιμη — στείλ' την τώρα, χωρίς να περιμένεις τον χρόνο"
+                        >
+                          <Send className="w-4 h-4" />
+                          Αποστολή τώρα
+                        </button>
+                        <button
+                          onClick={() => handleCancel(order.id)}
+                          className="flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-lg transition-all duration-150"
+                          style={{
+                            color: 'var(--danger)',
+                            backgroundColor: 'transparent',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          <XCircle className="w-4 h-4" />
+                          Ακύρωση
+                        </button>
+                      </div>
                     </>
                   ) : isPending ? (
                     <>
