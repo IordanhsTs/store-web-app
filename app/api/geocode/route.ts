@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireUser } from '../../../lib/api-auth';
 import { resolveBounds } from '../../../lib/geoapify';
+import { trackUsage } from '../../../lib/api-usage';
 
 // ── Geoapify geocode proxy (ΜΙΑ διεύθυνση → συντεταγμένες) ───────────────────
 // Χρήση: η ΑΦΕΤΗΡΙΑ του καταστήματος. Ο πίνακας stores κρατά μόνο κείμενο
@@ -49,6 +50,7 @@ export async function GET(req: NextRequest) {
       console.error('[geocode] Geoapify status', res.status);
       return NextResponse.json({ lat: null, lon: null }, { status: 502 });
     }
+    await trackUsage('geoapify', 'geocode');
     const json = await res.json();
     const f = (json.features || [])[0];
     const p = f?.properties || {};
