@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { Banknote, CreditCard, MapPin, Send, Clock, BookMarked, CircleCheck, TriangleAlert } from 'lucide-react';
 import { toast } from 'sonner';
-import { supabase } from './lib/supabase';
+import { supabase, getTenantSchema } from './lib/supabase';
 import { confirmDialog } from './ConfirmDialog';
 import { useStoreOrigin } from './useStoreOrigin';
 import { measureRoadDistance, type RoadDistance } from './lib/road-distance';
@@ -123,6 +123,19 @@ export default function OrderCreationForm({
   }, []);
   // Η προειδοποίηση περιμένει· η πράσινη επιβεβαίωση όχι (δεν ενοχλεί κανέναν).
   const [showHint, setShowHint] = useState(false);
+  // ── Πόλη της εταιρίας, για το παράδειγμα στο μήνυμα σφάλματος παρακάτω ─────
+  // Ήταν καρφωμένο «Φλώρινα» — έδειχνε λάθος πόλη σε κάθε άλλη εταιρία
+  // (βρέθηκε 23/09/2026 στο Αμύνταιο). public schema, όχι tenant-scoped default.
+  const [companyCity, setCompanyCity] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase.schema('public').from('companies')
+        .select('city').eq('schema_name', getTenantSchema()).maybeSingle();
+      if (!cancelled && data?.city) setCompanyCity(data.city);
+    })();
+    return () => { cancelled = true; };
+  }, []);
   // Το αποτέλεσμα της ΤΕΛΕΥΤΑΙΑΣ ανάλυσης, κλειδωμένο στο ακριβές κείμενο της
   // διεύθυνσης. Χωρίς αυτό, ένα «Ακύρωση» στον διάλογο επιπλέον χρέωσης και ένα
   // δεύτερο πάτημα «Αποστολή» θα ξανάκανε ΚΑΙ ΤΙΣ ΔΥΟ κλήσεις. Κρατάμε και τη
@@ -483,7 +496,7 @@ export default function OrderCreationForm({
       toast.error(
         'Η διεύθυνση δεν έχει επιβεβαιωθεί στον χάρτη. Διαλέξτε μία από τις προτάσεις ' +
         'που εμφανίζονται καθώς γράφετε, ή χρησιμοποιήστε τον χάρτη/τις αποθηκευμένες ' +
-        'διευθύνσεις. Αν δεν ξέρετε ακριβή διεύθυνση, γράψτε «Φλώρινα», διαλέξτε την ' +
+        `διευθύνσεις. Αν δεν ξέρετε ακριβή διεύθυνση, γράψτε «${companyCity || 'την πόλη σας'}», διαλέξτε την ` +
         'από τη λίστα και βάλτε τα στοιχεία του πελάτη στα Σχόλια.',
         { duration: 10000 }
       );
