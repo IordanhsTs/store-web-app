@@ -1,4 +1,5 @@
 import type { Bounds } from './geoapify';
+import { trackUsage } from './api-usage';
 
 // ── Google Places API (New) — autocomplete + place details ──────────────────
 // Το κλειδί ζει ΜΟΝΟ server-side, ίδιο pattern με το GEOAPIFY_API_KEY.
@@ -65,6 +66,7 @@ export async function googleAutocomplete(
     console.error('[google-places] autocomplete status', res.status, await res.text().catch(() => ''));
     return [];
   }
+  await trackUsage('google_places', 'autocomplete');
   const json = await res.json();
   type RawSuggestion = {
     placePrediction?: {
@@ -119,6 +121,8 @@ export async function googlePlaceDetails(
     console.error('[google-places] details status', res.status, await res.text().catch(() => ''));
     return null;
   }
+  // Χρεώνεται από τη Google ακόμα κι αν λείπουν συντεταγμένες, γι' αυτό μετράει εδώ.
+  await trackUsage('google_places', 'place_details');
   const json = await res.json();
   const lat = json.location?.latitude;
   const lon = json.location?.longitude;

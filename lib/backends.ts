@@ -53,15 +53,42 @@ function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = HE
   );
 }
 
+// ── Τι σημαίνει «υγιές» ──────────────────────────────────────────────────────
+// ΠΡΙΝ ρωτούσαμε το `/auth/v1/health`. Αυτό απαντάει ΜΟΝΟ για το GoTrue: δεν
+// αγγίζει ούτε το PostgREST ούτε την Postgres. Δηλαδή στην πιο συνηθισμένη
+// πραγματική βλάβη — πεσμένη ή κορεσμένη βάση — το check γύριζε καθαρό, το
+// failover δεν ενεργοποιούνταν ΠΟΤΕ, και η εφαρμογή ήταν εντελώς νεκρή για τον
+// χρήστη ενώ ο πίνακας ελέγχου έδειχνε πράσινο.
+//
+// ΤΩΡΑ χτυπάμε το PostgREST, που για να απαντήσει ΟΤΙΔΗΠΟΤΕ πρέπει να έχει
+// ζωντανή σύνδεση στη βάση (κάνει introspection του schema).
+//
+// Γιατί `status < 500` και όχι `res.ok`:
+//   • 200 → το vertex_health() (migration 0031) εκτελέστηκε, όλα καλά
+//   • 404 → η function δεν υπάρχει ακόμα σε ΑΥΤΟ το backend (πριν εφαρμοστεί το
+//     0031, ή στο standby). Το PostgREST όμως ΞΕΡΕΙ ότι δεν υπάρχει — άρα
+//     διάβασε το schema, άρα η βάση απαντάει. Υγιές.
+//   • 401/403 → ίδιο σκεπτικό: απάντησε το PostgREST, όχι το κενό.
+//   • 5xx → το PostgREST δεν φτάνει στη βάση. ΑΥΤΟ θέλαμε να πιάσουμε.
+//   • timeout/throw → πεσμένο ή άφταστο.
+//
+// Έτσι δουλεύει σωστά και ΠΡΙΝ και ΜΕΤΑ την εφαρμογή του migration, χωρίς
+// συντονισμένο deploy.
 export async function isHealthy(
   backend: Backend,
   timeoutMs = HEALTH_TIMEOUT_MS
 ): Promise<boolean> {
   try {
-    const res = await fetchWithTimeout(`${backend.url}/auth/v1/health`, {
-      headers: { apikey: backend.anonKey },
+    const res = await fetchWithTimeout(`${backend.url}/rest/v1/rpc/vertex_health`, {
+      method: 'POST',
+      headers: {
+        apikey: backend.anonKey,
+        Authorization: `Bearer ${backend.anonKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: '{}',
     }, timeoutMs);
-    return res.ok;
+    return res.status < 500;
   } catch {
     return false;
   }

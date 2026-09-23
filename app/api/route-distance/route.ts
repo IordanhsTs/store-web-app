@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireUser } from '../../../lib/api-auth';
 import { haversineKm, MAX_DISTANCE_KM } from '../../../lib/distance';
+import { trackUsage } from '../../../lib/api-usage';
 
 // ── Geoapify Routing proxy — ΠΡΑΓΜΑΤΙΚΗ οδική απόσταση κατάστημα → διεύθυνση ──
 // Το κλειδί ζει ΜΟΝΟ server-side, όπως στα /api/autocomplete και /api/geocode.
@@ -40,6 +42,9 @@ function parsePoint(raw: string | null): { lat: number; lon: number } | null {
 const round4 = (n: number) => n.toFixed(4);
 
 export async function GET(req: NextRequest) {
+  const guard = await requireUser();
+  if (!guard.ok) return guard.response;
+
   const from = parsePoint(req.nextUrl.searchParams.get('from'));
   const to = parsePoint(req.nextUrl.searchParams.get('to'));
   if (!from || !to) {
@@ -79,6 +84,7 @@ export async function GET(req: NextRequest) {
       console.error('[route-distance] Geoapify status', res.status);
       return NextResponse.json({ km: null, minutes: null }, { status: 502 });
     }
+    await trackUsage('geoapify', 'routing');
     const json = await res.json();
     const props = json?.features?.[0]?.properties;
     const meters = props?.distance;

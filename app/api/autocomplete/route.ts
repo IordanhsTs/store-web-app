@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireUser } from '../../../lib/api-auth';
 import { resolveBounds } from '../../../lib/geoapify';
 import { getGoogleApiKey, googleAutocomplete, isPoi } from '../../../lib/google-places';
 
@@ -20,6 +21,9 @@ const cache = new Map<string, Cached>();
 const TTL_MS = 24 * 60 * 60 * 1000; // 24 ώρες
 
 export async function GET(req: NextRequest) {
+  const guard = await requireUser();
+  if (!guard.ok) return guard.response;
+
   const text = (req.nextUrl.searchParams.get('text') || '').trim();
   const sessionToken = (req.nextUrl.searchParams.get('session') || '').trim();
   if (text.length < 3) {
